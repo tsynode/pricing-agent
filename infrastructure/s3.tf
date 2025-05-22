@@ -97,8 +97,7 @@ resource "aws_s3_object" "initial_policies" {
   # Prevent conflicts with existing objects
   lifecycle {
     ignore_changes = [
-      etag,
-      version_id
+      etag
     ]
   }
 }

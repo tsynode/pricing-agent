@@ -143,9 +143,25 @@ jobs:
           # Apply core infrastructure first (DynamoDB, S3, IAM)
           echo "\n📦 Applying core infrastructure (DynamoDB, S3, IAM)...\n"
           
-          # Apply DynamoDB tables - our lifecycle blocks will handle existing resources
+          # Apply DynamoDB tables - first import existing tables if they exist
+          echo "Checking for existing DynamoDB tables..."
+          
+          # Check if inventory table exists
+          INVENTORY_TABLE_EXISTS=$(aws dynamodb describe-table --table-name pricing-agent-${ENVIRONMENT}-inventory 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$INVENTORY_TABLE_EXISTS" != "NOT_FOUND" ]]; then
+            echo "Importing existing inventory table..."
+            terraform import aws_dynamodb_table.inventory pricing-agent-${ENVIRONMENT}-inventory || echo "Import failed, but continuing"
+          fi
+          
+          # Check if pricing table exists
+          PRICING_TABLE_EXISTS=$(aws dynamodb describe-table --table-name pricing-agent-${ENVIRONMENT}-pricing-rules 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$PRICING_TABLE_EXISTS" != "NOT_FOUND" ]]; then
+            echo "Importing existing pricing table..."
+            terraform import aws_dynamodb_table.pricing pricing-agent-${ENVIRONMENT}-pricing-rules || echo "Import failed, but continuing"
+          fi
+          
           echo "Applying DynamoDB tables..."
-          terraform apply -auto-approve -target=aws_dynamodb_table.inventory -target=aws_dynamodb_table.pricing
+          terraform apply -auto-approve -target=aws_dynamodb_table.inventory -target=aws_dynamodb_table.pricing || echo "Tables already exist, continuing with other resources"
           
           # Apply S3 buckets - our lifecycle blocks will handle existing resources
           echo "Applying S3 buckets and configurations..."

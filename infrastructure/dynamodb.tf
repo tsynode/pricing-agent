@@ -11,13 +11,16 @@ resource "aws_dynamodb_table" "pricing" {
   # This prevents Terraform from trying to modify certain attributes
   # that might cause conflicts with existing resources
   lifecycle {
+    prevent_destroy = true
     ignore_changes = [
       read_capacity,
       write_capacity,
       replica,
       point_in_time_recovery,
       stream_enabled,
-      stream_view_type
+      stream_view_type,
+      hash_key,
+      attribute
     ]
   }
   
@@ -37,13 +40,16 @@ resource "aws_dynamodb_table" "inventory" {
   # This prevents Terraform from trying to modify certain attributes
   # that might cause conflicts with existing resources
   lifecycle {
+    prevent_destroy = true
     ignore_changes = [
       read_capacity,
       write_capacity,
       replica,
       point_in_time_recovery,
       stream_enabled,
-      stream_view_type
+      stream_view_type,
+      hash_key,
+      attribute
     ]
   }
   
