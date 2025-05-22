@@ -119,92 +119,38 @@ jobs:
         env:
           ENVIRONMENT: ${{ env.ENVIRONMENT }}
       
-      - name: Terraform Plan
+      - name: Terraform Apply ECR Only
         working-directory: ./infrastructure
         run: |
-          # Enable Terraform debug logging
-          export TF_LOG=DEBUG
-          export TF_LOG_PATH=terraform-plan.log
-          
-          # Run plan with increased timeout
-          terraform plan -out=tfplan -detailed-exitcode || {
-            echo "Terraform plan failed, checking logs:"
-            tail -n 100 terraform-plan.log
-            exit 1
-          }
-        env:
-          TF_VAR_environment: ${{ env.ENVIRONMENT }}
-          TF_VAR_project_name: pricing-agent
-      
-      - name: Terraform Apply
-        working-directory: ./infrastructure
-        run: |
-          # Enable Terraform debug logging
-          export TF_LOG=TRACE
-          export TF_LOG_PATH=terraform-apply.log
-          
-          # Apply only specific resources that we know are safe to apply
-          echo "Applying only specific resources that we know are safe to apply..."
-          
-          # DynamoDB table items don't support import, so we'll just apply them directly
-          # If they already exist, Terraform will handle the conditional check failures gracefully
-          echo "Applying DynamoDB table items..."
-          terraform apply -auto-approve -target=aws_dynamodb_table_item.sample_inventory || true
-          terraform apply -auto-approve -target=aws_dynamodb_table_item.sample_pricing || true
-          
-          # Apply IAM policy attachments
-          terraform apply -auto-approve -target=aws_iam_role_policy_attachment.ecs_execution || true
-          terraform apply -auto-approve -target=aws_iam_role_policy_attachment.ecs_task || true
-          
-          # Apply S3 bucket policies and other non-conflicting resources
-          terraform apply -auto-approve -target=aws_s3_bucket_policy.policy || true
-          terraform apply -auto-approve -target=aws_s3_bucket_policy.session || true
-          
-          echo "Targeted apply completed successfully."
-          
-          # Always display the log tail for debugging
-          echo "DEBUG LOG OUTPUT:"
-          tail -n 500 terraform-apply.log
+          # Create only the ECR repository first
+          terraform apply -auto-approve -target=aws_ecr_repository.main
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
       
       - name: Set ECR Repository URL
-        if: github.ref != 'refs/heads/troubleshoot-terraform'
         id: set-ecr-repo
-        env:
-          ENVIRONMENT: ${{ env.ENVIRONMENT }}
-          AWS_REGION: ${{ env.AWS_REGION }}
         run: |
-          # Get ECR repository URI from Terraform output
-          cd infrastructure
-          
-          # First, check if the ECR repository exists in the state
-          terraform state list | grep aws_ecr_repository || {
-            echo "ECR repository not found in Terraform state. Skipping Docker build and push."
-            echo "ecr_repo_uri=" >> $GITHUB_OUTPUT
-            exit 0
-          }
-          
-          # Get the account ID and region to construct the ECR URL manually
+          # Get account ID for constructing ECR repository URL
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           REGION=${AWS_REGION}
           
           # Construct the ECR URL manually
           ECR_REPO_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/pricing-agent-${ENVIRONMENT}"
           
-          cd ..
-          
           echo "ecr_repo_uri=$ECR_REPO_URI" >> $GITHUB_OUTPUT
           echo "Constructed ECR repository URL: $ECR_REPO_URI"
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+      
+
       
       - name: Login to Amazon ECR
-        if: steps.set-ecr-repo.outputs.ecr_repo_uri != ''
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
       
       - name: Build and Push Docker Image
-        if: steps.set-ecr-repo.outputs.ecr_repo_uri != ''
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -212,30 +158,58 @@ jobs:
           tags: ${{ steps.set-ecr-repo.outputs.ecr_repo_uri }}:latest
           no-cache: true
       
+      - name: Terraform Apply Rest of Infrastructure
+        working-directory: ./infrastructure
+        run: |
+          # Now deploy the rest of the infrastructure
+          terraform apply -auto-approve
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_project_name: pricing-agent
+      
       - name: Update ECS service
-        if: github.ref != 'refs/heads/troubleshoot-terraform'
         run: |
           # Get cluster and service names from Terraform output
-          CLUSTER_NAME=$(cd infrastructure && terraform output ecs_cluster_name | tr -d '"')
-          SERVICE_NAME=$(cd infrastructure && terraform output ecs_service_name | tr -d '"')
+          cd infrastructure
           
-          # Check if cluster and service names are empty
-          if [ -z "$CLUSTER_NAME" ] || [ -z "$SERVICE_NAME" ]; then
-            echo "ECS cluster or service name not found in Terraform outputs. Skipping ECS service update."
+          # Check if the ECS service exists in the state
+          terraform state list | grep aws_ecs_service || {
+            echo "ECS service not found in Terraform state. Skipping ECS service update."
             exit 0
-          fi
+          }
+          
+          # Get the ECS cluster and service names
+          CLUSTER_NAME="pricing-agent-${ENVIRONMENT}-cluster"
+          SERVICE_NAME="pricing-agent-${ENVIRONMENT}-service"
           
           # Force new deployment
-          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment || {
+            echo "Failed to update ECS service. This is expected if the service doesn't exist yet."
+            echo "The service will be created by Terraform in the next step."
+          }
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
       
-      - name: Output application URL
-        if: github.ref != 'refs/heads/troubleshoot-terraform'
+      - name: Output Deployment Information
         run: |
-          echo "Application deployed successfully!"
-          ALB_DNS=$(cd infrastructure && terraform output alb_dns_name | tr -d '"')
+          echo "\n🚀 Deployment Complete! 🚀\n"
+          echo "Pricing Agent has been successfully deployed to AWS."
           
-          if [ -z "$ALB_DNS" ]; then
-            echo "ALB DNS name not found in Terraform outputs. Application URL not available."
+          cd infrastructure
+          
+          # Try to get the ALB DNS name
+          ALB_DNS=$(terraform output alb_dns_name 2>/dev/null | tr -d '"' || echo "")
+          
+          if [[ -n "$ALB_DNS" && "$ALB_DNS" != "null" ]]; then
+            echo "\nAccess your Pricing Agent at: http://$ALB_DNS"
           else
-            echo "URL: $ALB_DNS"
+            echo "\nPricing Agent URL will be available soon. Check AWS Console for details."
           fi
+          
+          echo "\nThis deployment uses:"
+          echo "- Strands Agents SDK with Streamlit UI"
+          echo "- Bedrock Knowledge Base for pricing policies"
+          echo "- DynamoDB for pricing rules and inventory data"
+          echo "- S3 for policy documents and session data"
+          
+          echo "\nDeployment complete!"
