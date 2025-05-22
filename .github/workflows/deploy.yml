@@ -175,6 +175,8 @@ jobs:
       
       - name: Build and push Docker image
         if: github.ref != 'refs/heads/troubleshoot-terraform'
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
         run: |
           # Get ECR repository URI from Terraform output
           ECR_REPO_URI=$(cd infrastructure && terraform output ecr_repository_url | tr -d '"')
@@ -185,8 +187,9 @@ jobs:
             exit 0
           fi
           
-          # Login to ECR
-          aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_REPO_URI
+          # Login to ECR - make sure to extract just the domain part of the ECR URI
+          ECR_DOMAIN=$(echo $ECR_REPO_URI | cut -d'/' -f1)
+          aws ecr get-login-password --region $(echo $AWS_REGION) | docker login --username AWS --password-stdin $ECR_DOMAIN
           
           # Build and push Docker image
           docker build -t $ECR_REPO_URI:latest .
