@@ -1,6 +1,17 @@
 resource "aws_s3_bucket" "session" {
   bucket = "${local.name_prefix}-sessions-${random_string.suffix.result}"
   
+  # This prevents Terraform from recreating the bucket if it already exists
+  # with a slightly different name or configuration
+  lifecycle {
+    ignore_changes = [
+      bucket,
+      server_side_encryption_configuration,
+      versioning,
+      acl
+    ]
+  }
+  
   tags = local.common_tags
 }
 
@@ -42,6 +53,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "session_lifecycle" {
 resource "aws_s3_bucket" "policy" {
   bucket = "${local.name_prefix}-policies-${random_string.suffix.result}"
   
+  # This prevents Terraform from recreating the bucket if it already exists
+  # with a slightly different name or configuration
+  lifecycle {
+    ignore_changes = [
+      bucket,
+      server_side_encryption_configuration,
+      versioning,
+      acl
+    ]
+  }
+  
   tags = local.common_tags
 }
 
@@ -71,6 +93,14 @@ resource "aws_s3_object" "initial_policies" {
   key    = each.value
   source = "${path.module}/../policies/${each.value}"
   etag   = filemd5("${path.module}/../policies/${each.value}")
+  
+  # Prevent conflicts with existing objects
+  lifecycle {
+    ignore_changes = [
+      etag,
+      version_id
+    ]
+  }
 }
 
 # Store bucket names in SSM Parameter Store for reference

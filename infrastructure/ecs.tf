@@ -6,17 +6,27 @@ resource "aws_ecs_cluster" "main" {
     value = "enabled"
   }
   
+  # Prevent conflicts with existing clusters
+  lifecycle {
+    create_before_destroy = true
+  }
+  
   tags = local.common_tags
 }
 
 resource "aws_ecs_task_definition" "main" {
-  family                   = "${local.name_prefix}-task"
+  family                   = "${local.name_prefix}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.container_cpu
   memory                   = var.container_memory
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
+  
+  # Task definitions are immutable, so create_before_destroy ensures the new one is created first
+  lifecycle {
+    create_before_destroy = true
+  }
   
   container_definitions = jsonencode([
     {
@@ -76,6 +86,16 @@ resource "aws_ecs_service" "main" {
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
   
+  # This prevents conflicts with existing services and allows external updates
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      task_definition,  # Allow external updates to task definition
+      desired_count,    # Allow auto-scaling to modify the count
+      load_balancer     # Handle load balancer attachment changes gracefully
+    ]
+  }
+  
   network_configuration {
     subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs.id]
@@ -110,6 +130,14 @@ resource "aws_ecr_repository" "main" {
   
   image_scanning_configuration {
     scan_on_push = true
+  }
+  
+  # Prevent conflicts with existing repositories
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      image_scanning_configuration
+    ]
   }
   
   tags = local.common_tags

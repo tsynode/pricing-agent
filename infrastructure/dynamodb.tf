@@ -8,6 +8,19 @@ resource "aws_dynamodb_table" "pricing" {
     type = "S"
   }
   
+  # This prevents Terraform from trying to modify certain attributes
+  # that might cause conflicts with existing resources
+  lifecycle {
+    ignore_changes = [
+      read_capacity,
+      write_capacity,
+      replica,
+      point_in_time_recovery,
+      stream_enabled,
+      stream_view_type
+    ]
+  }
+  
   tags = local.common_tags
 }
 
@@ -19,6 +32,19 @@ resource "aws_dynamodb_table" "inventory" {
   attribute {
     name = "product_id"
     type = "S"
+  }
+  
+  # This prevents Terraform from trying to modify certain attributes
+  # that might cause conflicts with existing resources
+  lifecycle {
+    ignore_changes = [
+      read_capacity,
+      write_capacity,
+      replica,
+      point_in_time_recovery,
+      stream_enabled,
+      stream_view_type
+    ]
   }
   
   tags = local.common_tags
@@ -73,6 +99,11 @@ resource "aws_dynamodb_table_item" "sample_pricing_rules" {
       count.index
     )
   )
+  
+  # Prevent conflicts with existing items
+  lifecycle {
+    ignore_changes = [item]
+  }
 }
 
 # Sample data for inventory
@@ -107,4 +138,9 @@ resource "aws_dynamodb_table_item" "sample_inventory" {
       count.index
     )
   )
+  
+  # Prevent conflicts with existing items
+  lifecycle {
+    ignore_changes = [item]
+  }
 }
