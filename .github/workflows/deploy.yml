@@ -168,9 +168,16 @@ jobs:
           TF_VAR_project_name: pricing-agent
       
       - name: Build and push Docker image
+        if: github.ref != 'refs/heads/troubleshoot-terraform'
         run: |
           # Get ECR repository URI from Terraform output
-          ECR_REPO_URI=$(cd infrastructure && terraform output -raw ecr_repository_url)
+          ECR_REPO_URI=$(cd infrastructure && terraform output ecr_repository_url | tr -d '"')
+          
+          # Check if ECR_REPO_URI is empty
+          if [ -z "$ECR_REPO_URI" ]; then
+            echo "ECR repository URL not found in Terraform outputs. Skipping Docker build and push."
+            exit 0
+          fi
           
           # Login to ECR
           aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_REPO_URI
@@ -180,15 +187,29 @@ jobs:
           docker push $ECR_REPO_URI:latest
       
       - name: Update ECS service
+        if: github.ref != 'refs/heads/troubleshoot-terraform'
         run: |
           # Get cluster and service names from Terraform output
-          CLUSTER_NAME=$(cd infrastructure && terraform output -raw ecs_cluster_name)
-          SERVICE_NAME=$(cd infrastructure && terraform output -raw ecs_service_name)
+          CLUSTER_NAME=$(cd infrastructure && terraform output ecs_cluster_name | tr -d '"')
+          SERVICE_NAME=$(cd infrastructure && terraform output ecs_service_name | tr -d '"')
+          
+          # Check if cluster and service names are empty
+          if [ -z "$CLUSTER_NAME" ] || [ -z "$SERVICE_NAME" ]; then
+            echo "ECS cluster or service name not found in Terraform outputs. Skipping ECS service update."
+            exit 0
+          fi
           
           # Force new deployment
           aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
       
       - name: Output application URL
+        if: github.ref != 'refs/heads/troubleshoot-terraform'
         run: |
           echo "Application deployed successfully!"
-          echo "URL: $(cd infrastructure && terraform output -raw alb_dns_name)"
+          ALB_DNS=$(cd infrastructure && terraform output alb_dns_name | tr -d '"')
+          
+          if [ -z "$ALB_DNS" ]; then
+            echo "ALB DNS name not found in Terraform outputs. Application URL not available."
+          else
+            echo "URL: $ALB_DNS"
+          fi
