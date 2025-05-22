@@ -3,6 +3,9 @@ module "bedrock" {
   source  = "aws-ia/bedrock/aws"
   version = "0.0.24"  # Updated to latest version
   
+  # Required foundation model for IAM policies
+  foundation_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+  
   # Knowledge base configuration
   create_default_kb = true
   create_s3_data_source = true
@@ -13,6 +16,9 @@ module "bedrock" {
   
   # S3 data source configuration
   kb_s3_data_source = aws_s3_bucket.policy.arn
+  
+  # OpenSearch configuration
+  opensearch_url = null  # This will be created by the module
   
   # Tags
   tags = local.common_tags
