@@ -17,9 +17,6 @@ module "bedrock" {
   # S3 data source configuration
   kb_s3_data_source = aws_s3_bucket.policy.arn
   
-  # OpenSearch configuration
-  opensearch_url = null  # This will be created by the module
-  
   # Tags
   tags = local.common_tags
 }
