@@ -6,13 +6,13 @@ module "bedrock" {
   # Required foundation model for IAM policies
   foundation_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
   
-  # Knowledge base configuration
+  # Knowledge base configuration - minimal required settings
   create_default_kb = true
+  create_agent = false
   create_s3_data_source = true
   
-  # Knowledge base configuration
+  # Knowledge base name
   kb_name = "${local.name_prefix}-kb"
-  instruction = "You are a pricing compliance agent who can provide detailed information about pricing policies and regulations."
   
   # S3 data source configuration
   kb_s3_data_source = aws_s3_bucket.policy.arn
