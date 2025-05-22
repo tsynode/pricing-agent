@@ -3,7 +3,7 @@
 ###########################
 
 # Bedrock Knowledge Base
-resource "aws_bedrock_knowledge_base" "pricing_policies" {
+resource "aws_bedrockagent_knowledge_base" "pricing_policies" {
   name        = "${local.name_prefix}-pricing-policies-kb"
   description = "Knowledge base for pricing policies"
   
@@ -43,8 +43,8 @@ resource "aws_bedrock_knowledge_base" "pricing_policies" {
 }
 
 # Bedrock Knowledge Base Data Source
-resource "aws_bedrock_knowledge_base_data_source" "pricing_policies" {
-  knowledge_base_id = aws_bedrock_knowledge_base.pricing_policies.id
+resource "aws_bedrockagent_data_source" "pricing_policies" {
+  knowledge_base_id = aws_bedrockagent_knowledge_base.pricing_policies.id
   name              = "${local.name_prefix}-pricing-policies-data-source"
   description       = "S3 data source for pricing policies"
   
@@ -72,7 +72,7 @@ resource "aws_bedrock_knowledge_base_data_source" "pricing_policies" {
 }
 
 # Bedrock Agent
-resource "aws_bedrock_agent" "pricing_agent" {
+resource "aws_bedrockagent_agent" "pricing_agent" {
   name        = "${local.name_prefix}-pricing-agent"
   description = "AI agent for pricing compliance"
   
@@ -102,15 +102,15 @@ resource "aws_bedrock_agent" "pricing_agent" {
   role_arn = aws_iam_role.bedrock_service.arn
   
   knowledge_base_associations {
-    knowledge_base_id = aws_bedrock_knowledge_base.pricing_policies.id
+    knowledge_base_id = aws_bedrockagent_knowledge_base.pricing_policies.id
   }
   
   tags = local.common_tags
 }
 
 # Inventory Action Group
-resource "aws_bedrock_agent_action_group" "inventory_tools" {
-  agent_id    = aws_bedrock_agent.pricing_agent.id
+resource "aws_bedrockagent_agent_action_group" "inventory_tools" {
+  agent_id    = aws_bedrockagent_agent.pricing_agent.id
   name        = "InventoryTools"
   description = "Tools for scanning inventory"
   
@@ -179,8 +179,8 @@ resource "aws_bedrock_agent_action_group" "inventory_tools" {
 }
 
 # Pricing Tools Action Group
-resource "aws_bedrock_agent_action_group" "pricing_tools" {
-  agent_id    = aws_bedrock_agent.pricing_agent.id
+resource "aws_bedrockagent_agent_action_group" "pricing_tools" {
+  agent_id    = aws_bedrockagent_agent.pricing_agent.id
   name        = "PricingTools"
   description = "Tools for managing product prices"
   
@@ -328,8 +328,8 @@ resource "aws_bedrock_agent_action_group" "pricing_tools" {
 }
 
 # Bedrock Agent Alias
-resource "aws_bedrock_agent_alias" "pricing_agent" {
-  agent_id    = aws_bedrock_agent.pricing_agent.id
+resource "aws_bedrockagent_agent_alias" "pricing_agent" {
+  agent_id    = aws_bedrockagent_agent.pricing_agent.id
   name        = "${local.name_prefix}-pricing-agent-alias"
   description = "Alias for pricing compliance agent"
   
