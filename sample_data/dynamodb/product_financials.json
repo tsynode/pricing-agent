@@ -1,0 +1,137 @@
+[
+  {
+    "item_id": "ELEC-12345",
+    "current_price": 199.99,
+    "cost": 120.00,
+    "category": "electronics",
+    "subcategory": "laptops",
+    "brand": "TechPro",
+    "last_updated": "2025-05-15T10:30:00Z"
+  },
+  {
+    "item_id": "ELEC-12346",
+    "current_price": 899.99,
+    "cost": 650.00,
+    "category": "electronics",
+    "subcategory": "televisions",
+    "brand": "VisionMax",
+    "last_updated": "2025-05-14T14:45:00Z"
+  },
+  {
+    "item_id": "ELEC-12347",
+    "current_price": 49.99,
+    "cost": 22.50,
+    "category": "electronics",
+    "subcategory": "accessories",
+    "brand": "ConnectPro",
+    "last_updated": "2025-05-16T09:15:00Z"
+  },
+  {
+    "item_id": "APRL-54321",
+    "current_price": 49.99,
+    "cost": 18.75,
+    "category": "apparel",
+    "subcategory": "shirts",
+    "brand": "UrbanStyle",
+    "last_updated": "2025-05-10T11:20:00Z"
+  },
+  {
+    "item_id": "APRL-54322",
+    "current_price": 89.99,
+    "cost": 35.00,
+    "category": "apparel",
+    "subcategory": "jackets",
+    "brand": "OutdoorLife",
+    "last_updated": "2025-05-12T16:30:00Z"
+  },
+  {
+    "item_id": "APRL-54323",
+    "current_price": 29.99,
+    "cost": 12.50,
+    "category": "apparel",
+    "subcategory": "accessories",
+    "brand": "FashionPlus",
+    "last_updated": "2025-05-17T08:45:00Z"
+  },
+  {
+    "item_id": "HOME-98765",
+    "current_price": 129.99,
+    "cost": 65.00,
+    "category": "home_goods",
+    "subcategory": "kitchen",
+    "brand": "ChefSelect",
+    "last_updated": "2025-05-13T13:10:00Z"
+  },
+  {
+    "item_id": "HOME-98766",
+    "current_price": 249.99,
+    "cost": 137.50,
+    "category": "home_goods",
+    "subcategory": "furniture",
+    "brand": "ComfortLiving",
+    "last_updated": "2025-05-11T10:00:00Z"
+  },
+  {
+    "item_id": "HOME-98767",
+    "current_price": 79.99,
+    "cost": 48.00,
+    "category": "home_goods",
+    "subcategory": "decor",
+    "brand": "ElegantHome",
+    "last_updated": "2025-05-16T15:20:00Z"
+  },
+  {
+    "item_id": "SPORT-67890",
+    "current_price": 159.99,
+    "cost": 80.00,
+    "category": "sporting_goods",
+    "subcategory": "fitness",
+    "brand": "ActiveLife",
+    "last_updated": "2025-05-14T09:30:00Z"
+  },
+  {
+    "item_id": "SPORT-67891",
+    "current_price": 59.99,
+    "cost": 27.00,
+    "category": "sporting_goods",
+    "subcategory": "outdoor",
+    "brand": "TrailBlazer",
+    "last_updated": "2025-05-15T14:15:00Z"
+  },
+  {
+    "item_id": "SPORT-67892",
+    "current_price": 19.99,
+    "cost": 8.50,
+    "category": "sporting_goods",
+    "subcategory": "accessories",
+    "brand": "SportsPro",
+    "last_updated": "2025-05-17T11:45:00Z"
+  },
+  {
+    "item_id": "TOY-24680",
+    "current_price": 24.99,
+    "cost": 10.00,
+    "category": "toys",
+    "subcategory": "action_figures",
+    "brand": "PlayWorld",
+    "last_updated": "2025-05-12T10:30:00Z"
+  },
+  {
+    "item_id": "TOY-24681",
+    "current_price": 39.99,
+    "cost": 16.00,
+    "category": "toys",
+    "subcategory": "board_games",
+    "brand": "GameMaster",
+    "last_updated": "2025-05-13T16:45:00Z"
+  },
+  {
+    "item_id": "TOY-24682",
+    "current_price": 14.99,
+    "cost": 5.25,
+    "category": "toys",
+    "subcategory": "plush",
+    "brand": "CuddlePals",
+    "last_updated": "2025-05-16T13:20:00Z"
+  }
+]

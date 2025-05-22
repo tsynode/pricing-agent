@@ -1,0 +1,137 @@
+name: Deploy AI Pricing Compliance System
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      aws_region:
+        description: 'AWS Region to deploy to'
+        required: true
+        default: 'us-east-1'
+        type: choice
+        options:
+          - us-east-1
+          - us-east-2
+          - us-west-1
+          - us-west-2
+          - eu-west-1
+          - eu-central-1
+
+env:
+  AWS_REGION: ${{ github.event.inputs.aws_region || 'us-east-1' }}
+  TERRAFORM_VERSION: 1.5.7
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        working-directory: ./infrastructure
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: ./infrastructure
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: ./infrastructure
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: ./infrastructure
+        run: terraform apply -auto-approve tfplan
+
+      - name: Get ECR Repository URL
+        id: ecr
+        run: |
+          ECR_REPO_URL=$(terraform -chdir=./infrastructure output -raw ecr_repository_url)
+          echo "repo_url=${ECR_REPO_URL}" >> $GITHUB_OUTPUT
+
+      - name: Package Lambda Functions
+        run: |
+          # Create deployment packages for Lambda functions
+          mkdir -p ./build/lambdas
+          
+          # Inventory Scanner Lambda
+          cd ./src/lambdas/inventory_scanner
+          pip install -r requirements.txt -t ./package
+          cp lambda_function.py ./package/
+          cd ./package
+          zip -r ../../../../../../../build/lambdas/inventory_scanner.zip .
+          cd ../../../
+          
+          # Batch Processor Lambda
+          cd ./batch_processor
+          pip install -r requirements.txt -t ./package
+          cp lambda_function.py ./package/
+          cd ./package
+          zip -r ../../../../../../../build/lambdas/batch_processor.zip .
+          cd ../../../
+          
+          # Pricing Tools Lambda
+          cd ./pricing_tools
+          pip install -r requirements.txt -t ./package
+          cp lambda_function.py ./package/
+          cd ./package
+          zip -r ../../../../../../../build/lambdas/pricing_tools.zip .
+          cd ../../../
+
+      - name: Update Lambda Functions
+        run: |
+          # Update Lambda functions with new code
+          aws lambda update-function-code \
+            --function-name $(terraform -chdir=./infrastructure output -raw inventory_scanner_lambda_name) \
+            --zip-file fileb://build/lambdas/inventory_scanner.zip
+            
+          aws lambda update-function-code \
+            --function-name $(terraform -chdir=./infrastructure output -raw batch_processor_lambda_name) \
+            --zip-file fileb://build/lambdas/batch_processor.zip
+            
+          aws lambda update-function-code \
+            --function-name $(terraform -chdir=./infrastructure output -raw pricing_tools_lambda_name) \
+            --zip-file fileb://build/lambdas/pricing_tools.zip
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and push Streamlit Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./src/streamlit
+          push: true
+          tags: ${{ steps.ecr.outputs.repo_url }}:latest
+
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster $(terraform -chdir=./infrastructure output -raw ecs_cluster_name) \
+            --service $(terraform -chdir=./infrastructure output -raw ecs_service_name) \
+            --force-new-deployment
+
+      - name: Output Deployment Information
+        run: |
+          echo "Deployment completed successfully!"
+          echo "Application URL: http://$(terraform -chdir=./infrastructure output -raw alb_dns_name)"
