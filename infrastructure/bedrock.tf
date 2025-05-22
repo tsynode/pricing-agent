@@ -3,22 +3,14 @@ module "bedrock" {
   source  = "aws-ia/bedrock/aws"
   version = "0.0.20"
   
-  # Create a vector knowledge base with OpenSearch Serverless
+  # Minimal configuration for testing
   create_default_kb = true
-  create_s3_data_source = true
   
   # Knowledge base configuration
   kb_name = "${local.name_prefix}-kb"
-  instruction = "You are a pricing compliance agent who can provide detailed information about pricing policies and regulations."
-  
-  # S3 data source configuration
-  # The S3 bucket is referenced by ARN
-  kb_s3_data_source = aws_s3_bucket.policy.arn
   
   # Tags
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-kb"
-  })
+  tags = local.common_tags
 }
 
 # Store knowledge base ID in SSM Parameter Store
