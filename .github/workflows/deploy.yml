@@ -137,15 +137,6 @@ jobs:
           # Force new deployment
           aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
       
-      - name: Upload Terraform logs
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: terraform-logs
-          path: |
-            infrastructure/terraform-*.log
-          retention-days: 5
-
       - name: Output application URL
         run: |
           echo "Application deployed successfully!"
