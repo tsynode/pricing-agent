@@ -2,6 +2,240 @@
 # Lambda Functions
 ###########################
 
+###########################
+# Lambda IAM Resources
+###########################
+
+# Inventory Scanner Lambda Role
+resource "aws_iam_role" "inventory_scanner_lambda" {
+  name = "${local.name_prefix}-inventory-scanner-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_policy" "inventory_scanner_lambda" {
+  name        = "${local.name_prefix}-inventory-scanner-lambda-policy"
+  description = "Policy for Inventory Scanner Lambda"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Scan",
+          "dynamodb:Query",
+          "dynamodb:GetItem"
+        ]
+        Resource = [
+          aws_dynamodb_table.inventory.arn,
+          aws_dynamodb_table.product_financials.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:SendMessageBatch"
+        ]
+        Resource = aws_sqs_queue.pricing_batch.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "inventory_scanner_lambda" {
+  role       = aws_iam_role.inventory_scanner_lambda.name
+  policy_arn = aws_iam_policy.inventory_scanner_lambda.arn
+}
+
+# Batch Processor Lambda Role
+resource "aws_iam_role" "batch_processor_lambda" {
+  name = "${local.name_prefix}-batch-processor-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_policy" "batch_processor_lambda" {
+  name        = "${local.name_prefix}-batch-processor-lambda-policy"
+  description = "Policy for Batch Processor Lambda"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = aws_sqs_queue.pricing_batch.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeAgent",
+          "bedrock:InvokeModel"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:UpdateItem",
+          "dynamodb:PutItem"
+        ]
+        Resource = aws_dynamodb_table.product_financials.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "batch_processor_lambda" {
+  role       = aws_iam_role.batch_processor_lambda.name
+  policy_arn = aws_iam_policy.batch_processor_lambda.arn
+}
+
+# Pricing Tools Lambda Role
+resource "aws_iam_role" "pricing_tools_lambda" {
+  name = "${local.name_prefix}-pricing-tools-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_policy" "pricing_tools_lambda" {
+  name        = "${local.name_prefix}-pricing-tools-lambda-policy"
+  description = "Policy for Pricing Tools Lambda"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:PutItem"
+        ]
+        Resource = [
+          aws_dynamodb_table.inventory.arn,
+          aws_dynamodb_table.product_financials.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "pricing_tools_lambda" {
+  role       = aws_iam_role.pricing_tools_lambda.name
+  policy_arn = aws_iam_policy.pricing_tools_lambda.arn
+}
+
+# Attach Bedrock access policy to Lambda roles
+resource "aws_iam_role_policy_attachment" "inventory_scanner_bedrock_access" {
+  role       = aws_iam_role.inventory_scanner_lambda.name
+  policy_arn = aws_iam_policy.bedrock_access.arn
+}
+
+resource "aws_iam_role_policy_attachment" "pricing_tools_bedrock_access" {
+  role       = aws_iam_role.pricing_tools_lambda.name
+  policy_arn = aws_iam_policy.bedrock_access.arn
+}
+
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "inventory_scanner" {
   name              = "/aws/lambda/${local.name_prefix}-inventory-scanner"
