@@ -20,7 +20,7 @@ output "ecs_service_name" {
 
 output "knowledge_base_id" {
   description = "ID of the Bedrock knowledge base"
-  value       = aws_bedrock_knowledge_base.pricing_kb.id
+  value       = module.bedrock.default_kb_identifier
 }
 
 output "session_bucket_name" {
