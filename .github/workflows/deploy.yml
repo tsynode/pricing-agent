@@ -172,21 +172,31 @@ jobs:
       - name: Set ECR Repository URL
         if: github.ref != 'refs/heads/troubleshoot-terraform'
         id: set-ecr-repo
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          AWS_REGION: ${{ env.AWS_REGION }}
         run: |
           # Get ECR repository URI from Terraform output
           cd infrastructure
-          ECR_REPO_URI=$(terraform output | grep ecr_repository_url | awk -F'= ' '{print $2}' | tr -d '"')
-          cd ..
           
-          # Check if ECR_REPO_URI is empty
-          if [ -z "$ECR_REPO_URI" ]; then
-            echo "ECR repository URL not found in Terraform outputs. Skipping Docker build and push."
+          # First, check if the ECR repository exists in the state
+          terraform state list | grep aws_ecr_repository || {
+            echo "ECR repository not found in Terraform state. Skipping Docker build and push."
             echo "ecr_repo_uri=" >> $GITHUB_OUTPUT
             exit 0
-          fi
+          }
+          
+          # Get the account ID and region to construct the ECR URL manually
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REGION=${AWS_REGION}
+          
+          # Construct the ECR URL manually
+          ECR_REPO_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/pricing-agent-${ENVIRONMENT}"
+          
+          cd ..
           
           echo "ecr_repo_uri=$ECR_REPO_URI" >> $GITHUB_OUTPUT
-          echo "Found ECR repository URL: $ECR_REPO_URI"
+          echo "Constructed ECR repository URL: $ECR_REPO_URI"
       
       - name: Login to Amazon ECR
         if: steps.set-ecr-repo.outputs.ecr_repo_uri != ''
