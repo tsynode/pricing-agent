@@ -1,7 +1,7 @@
 # AI-Powered Pricing Compliance System
 
 ## Overview
-This repository contains an intelligent pricing compliance system that automatically monitors and adjusts product prices based on dynamic pricing policies. The system uses Amazon Bedrock's agentic AI to make autonomous pricing decisions while handling millions of inventory items through scalable batch processing.
+This repository contains an intelligent pricing compliance system that automatically monitors and adjusts product prices based on dynamic pricing policies. The system uses Amazon Bedrock's agentic AI with Claude 3.7 Sonnet to make autonomous pricing decisions while handling millions of inventory items through scalable batch processing.
 
 ## Key Capabilities
 
@@ -24,9 +24,11 @@ The system is built on AWS services with a serverless architecture:
   - Batch Processor: Bridges SQS to Bedrock Agent
   - Pricing Tools: Provides pricing operations for the agent
 - **DynamoDB Tables**: Store product financials and inventory data
-- **Amazon Bedrock**: AI agent and knowledge base for pricing decisions
+- **Amazon Bedrock**:
+  - AI Agent: Uses Claude 3.7 Sonnet (anthropic.claude-3-7-sonnet-20250219-v1:0)
+  - Knowledge Base: Uses Titan Embed v2 (amazon.titan-embed-text-v2:0)
 - **ECS Fargate**: Hosts the Streamlit UI for category managers
-- **S3 Bucket**: Stores pricing policy documents
+- **S3 Bucket**: Stores pricing policy documents in Markdown format
 
 ## Getting Started
 
@@ -36,7 +38,7 @@ The system is built on AWS services with a serverless architecture:
 - Docker
 - Python 3.11+
 - AWS CLI configured
-- Amazon Bedrock access
+- Amazon Bedrock access with Claude 3.7 Sonnet and Titan Embed v2 enabled
 
 ### Deployment
 
@@ -46,7 +48,10 @@ The system is built on AWS services with a serverless architecture:
 2. Configure AWS credentials in GitHub repository secrets:
    - `AWS_ACCESS_KEY_ID`
    - `AWS_SECRET_ACCESS_KEY`
-3. Push to the main branch to trigger deployment
+   - `AWS_SESSION_TOKEN` (optional, for temporary credentials)
+3. Either:
+   - Push to the main branch to trigger automatic deployment, or
+   - Manually trigger the workflow from the Actions tab and select your desired AWS region
 
 #### Option 2: Manual Deployment
 
