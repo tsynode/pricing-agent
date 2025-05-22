@@ -13,14 +13,41 @@ This application helps ensure products are priced correctly according to company
 
 ## Architecture
 
-- **Strands Agents SDK**: Powers the AI agent with Claude 3 Sonnet
-- **Streamlit**: Provides the user interface
-- **AWS Services**:
-  - ECS Fargate: Hosts the containerized application
-  - DynamoDB: Stores pricing rules and inventory data
-  - S3: Stores pricing policy documents
-  - Bedrock Knowledge Base: Stores and retrieves pricing policies
-  - OpenSearch Serverless: Powers the vector search for the knowledge base
+### Current Implementation (Stage 1)
+
+![Current Architecture](docs/images/current_architecture.png)
+
+Our current implementation focuses on simplicity and core functionality:
+
+- **Streamlit UI with Strands Agent**: A single container running both the UI and agent
+- **Direct Tool Integration**: Tools are implemented as Python functions with the `@tool` decorator
+- **Knowledge Base**: Bedrock Knowledge Base with OpenSearch for policy retrieval
+- **Data Storage**: DynamoDB tables for pricing rules and inventory data
+
+This architecture provides a clean, maintainable implementation that delivers the core functionality while minimizing infrastructure complexity.
+
+### Target Architecture (Future)
+
+![Target Architecture](docs/images/target_architecture.png)
+
+The target architecture adds scalability for handling large inventories:
+
+- **Batch Processing**: EventBridge for scheduled runs, SQS for batch queues
+- **Separate Lambda Functions**: Dedicated functions for inventory scanning and pricing tools
+- **Same Knowledge Base**: Maintains the same knowledge base architecture
+- **Same Data Storage**: Continues using DynamoDB for data persistence
+
+This architecture will be implemented incrementally as inventory size grows and requires more scalable processing.
+
+### CI/CD Pipeline
+
+![CI/CD Pipeline](docs/images/cicd_pipeline.png)
+
+Our deployment process is fully automated:
+
+- **GitHub Repository**: Source code and policy documents
+- **GitHub Actions**: Automated workflows for deployment, destruction, and KB syncing
+- **Terraform**: Infrastructure as Code for all AWS resources
 
 ## Repository Structure
 
@@ -36,6 +63,9 @@ pricing-agent/
 │   │   └── inventory.py
 │   ├── app.py                  # Streamlit UI
 │   └── requirements.txt        # Python dependencies
+│
+├── docs/                       # Documentation
+│   └── images/                 # Architecture diagrams
 │
 ├── infrastructure/             # Terraform infrastructure
 │   ├── main.tf
@@ -68,48 +98,23 @@ pricing-agent/
         └── sync_kb.yml         # KB sync workflow
 ```
 
-## Getting Started
+## Deployment
 
-### Prerequisites
+The application is deployed using GitHub Actions CI/CD pipeline:
 
-- AWS Account with appropriate permissions
-- Terraform installed
-- Python 3.12 or higher
-- Docker (for local development)
+1. **Set up GitHub Secrets**:
+   - `AWS_ACCESS_KEY_ID`: AWS access key with appropriate permissions
+   - `AWS_SECRET_ACCESS_KEY`: Corresponding AWS secret key
+   - `AWS_REGION`: AWS region for deployment (e.g., `us-east-1`)
+   - `ENVIRONMENT`: Deployment environment (e.g., `dev`, `staging`, `prod`)
 
-### Local Development
+2. **Trigger Deployment**:
+   - Push to the main branch, or
+   - Manually trigger the workflow from GitHub Actions tab
 
-1. Install dependencies:
-   ```
-   cd app
-   pip install -r requirements.txt
-   ```
-
-2. Run the Streamlit app locally:
-   ```
-   cd app
-   streamlit run app.py
-   ```
-
-### Deployment
-
-1. Configure AWS credentials:
-   ```
-   aws configure
-   ```
-
-2. Initialize Terraform:
-   ```
-   cd infrastructure
-   terraform init
-   ```
-
-3. Deploy the infrastructure:
-   ```
-   terraform apply
-   ```
-
-4. The application will be available at the ALB URL provided in the Terraform outputs.
+3. **Access the Application**:
+   - The application URL will be available in the Terraform outputs
+   - This can be found in the GitHub Actions logs or AWS Console
 
 ## Knowledge Base Management
 
@@ -118,6 +123,10 @@ Pricing policies are stored in the `policies/` directory. To update policies:
 1. Edit the policy files in the appropriate subdirectory
 2. Commit and push changes to the repository
 3. The GitHub Actions workflow will automatically sync the changes to the knowledge base
+
+## Interactive Diagrams
+
+For interactive diagrams, you can open the [architecture_pricing_agent.drawio](architecture_pricing_agent.drawio) file using [draw.io](https://app.diagrams.net/).
 
 ## License
 
