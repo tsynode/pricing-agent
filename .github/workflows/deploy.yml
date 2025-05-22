@@ -100,7 +100,29 @@ jobs:
       - name: "Step 4: Run terraform plan"
         run: |
           cd infrastructure
-          terraform plan -input=false -detailed-exitcode -out=tfplan || echo "Plan failed with exit code $?"
+          
+          # Set TF_LOG for more detailed output during plan
+          export TF_LOG=DEBUG
+          
+          # Run plan with detailed error capturing
+          terraform plan -input=false -detailed-exitcode -out=tfplan > plan_output.txt 2>&1 || {
+            echo "Plan failed with exit code $?"
+            echo "\n\n==== PLAN ERROR DETAILS ===="
+            cat plan_output.txt
+            
+            # Try to extract specific error messages
+            echo "\n\n==== EXTRACTED ERRORS ===="
+            grep -A 10 "Error:" plan_output.txt || echo "No specific error messages found"
+            
+            # Exit with error to stop the workflow
+            exit 1
+          }
+          
+          # Verify the plan file exists and is valid
+          if [ ! -f tfplan ]; then
+            echo "Error: Plan file was not created"
+            exit 1
+          fi
           
           # Output a summary of the plan
           echo "\n\n==== PLAN SUMMARY ===="
@@ -109,15 +131,24 @@ jobs:
       - name: "Step 5: Apply Terraform Changes"
         working-directory: ./infrastructure
         run: |
+          # Verify the plan file exists and is valid before attempting to apply
+          if [ ! -f tfplan ]; then
+            echo "Error: Plan file does not exist or is invalid. Cannot proceed with apply."
+            exit 1
+          fi
+          
           # Set TF_LOG for more detailed output
-          export TF_LOG=INFO
+          export TF_LOG=DEBUG
           
           # Apply with error handling
-          terraform apply -auto-approve tfplan || {
-            echo "\n\n==== ERROR DETAILS ===="
-            echo "Terraform apply failed. Checking for specific resource errors..."
+          terraform apply -auto-approve tfplan > apply_output.txt 2>&1 || {
+            echo "\n\n==== APPLY ERROR DETAILS ===="
+            cat apply_output.txt
             
-            # Try to extract more specific error information
+            echo "\n\n==== EXTRACTED ERRORS ===="
+            grep -A 10 "Error:" apply_output.txt || echo "No specific error messages found"
+            
+            echo "\n\nTerraform apply failed. Checking for state information..."
             terraform state list 2>/dev/null || echo "No state available"
             
             exit 1
