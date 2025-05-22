@@ -7,6 +7,9 @@ on:
       - 'policies/**'  # Policies have their own workflow
   workflow_dispatch:  # Allow manual triggering
 
+env:
+  ENVIRONMENT: dev  # Default environment, can be overridden in repository secrets
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -20,6 +23,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
       
       - name: Set up Terraform
@@ -27,9 +31,52 @@ jobs:
         with:
           terraform_version: 1.5.0
       
+      - name: "Create S3 Bucket for Terraform State"
+        run: |
+          # Create a unique bucket name with GitHub repository owner
+          BUCKET_NAME="pricing-agent-tf-state-$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
+          
+          # Create S3 bucket for Terraform state if it doesn't exist
+          aws s3api head-bucket --bucket $BUCKET_NAME 2>/dev/null || \
+          aws s3api create-bucket \
+            --bucket $BUCKET_NAME \
+            --region ${{ secrets.AWS_REGION }} \
+            $([[ "${{ secrets.AWS_REGION }}" == "us-east-1" ]] || echo "--create-bucket-configuration LocationConstraint=${{ secrets.AWS_REGION }}")
+          
+          # Enable versioning on the bucket
+          aws s3api put-bucket-versioning \
+            --bucket $BUCKET_NAME \
+            --versioning-configuration Status=Enabled
+          
+          # Block public access to the bucket
+          aws s3api put-public-access-block \
+            --bucket $BUCKET_NAME \
+            --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+          
+          # Enable encryption on the bucket
+          aws s3api put-bucket-encryption \
+            --bucket $BUCKET_NAME \
+            --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
+          
+          # Save the bucket name for Terraform Init step
+          echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
+          
+          # Print the bucket name for debugging
+          echo "Using S3 bucket: $BUCKET_NAME"
+      
       - name: Terraform Init
         working-directory: ./infrastructure
-        run: terraform init
+        run: |
+          # Print environment variables for debugging
+          echo "Using S3 bucket: $TF_BUCKET_NAME"
+          echo "Using AWS region: ${{ secrets.AWS_REGION }}"
+          
+          # Initialize with S3 backend
+          terraform init \
+            -backend-config="bucket=$TF_BUCKET_NAME" \
+            -backend-config="key=pricing-agent-${{ env.ENVIRONMENT }}/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="encrypt=true"
       
       - name: Terraform Validate
         working-directory: ./infrastructure
@@ -39,14 +86,14 @@ jobs:
         working-directory: ./infrastructure
         run: terraform plan -out=tfplan
         env:
-          TF_VAR_environment: ${{ secrets.ENVIRONMENT }}
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
       
       - name: Terraform Apply
         working-directory: ./infrastructure
         run: terraform apply -auto-approve tfplan
         env:
-          TF_VAR_environment: ${{ secrets.ENVIRONMENT }}
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
       
       - name: Build and push Docker image

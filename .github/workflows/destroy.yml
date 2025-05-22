@@ -3,6 +3,9 @@ name: Destroy Pricing Agent Infrastructure
 on:
   workflow_dispatch:  # Manual trigger only
 
+env:
+  ENVIRONMENT: dev  # Default environment, can be overridden in repository secrets
+
 jobs:
   destroy:
     runs-on: ubuntu-latest
@@ -16,6 +19,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
       
       - name: Set up Terraform
@@ -23,13 +27,34 @@ jobs:
         with:
           terraform_version: 1.5.0
       
+      - name: "Get S3 Bucket for Terraform State"
+        run: |
+          # Create a unique bucket name with GitHub repository owner
+          BUCKET_NAME="pricing-agent-tf-state-$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
+          
+          # Save the bucket name for Terraform Init step
+          echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
+          
+          # Print the bucket name for debugging
+          echo "Using S3 bucket: $BUCKET_NAME"
+      
       - name: Terraform Init
         working-directory: ./infrastructure
-        run: terraform init
+        run: |
+          # Print environment variables for debugging
+          echo "Using S3 bucket: $TF_BUCKET_NAME"
+          echo "Using AWS region: ${{ secrets.AWS_REGION }}"
+          
+          # Initialize with S3 backend
+          terraform init \
+            -backend-config="bucket=$TF_BUCKET_NAME" \
+            -backend-config="key=pricing-agent-${{ env.ENVIRONMENT }}/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="encrypt=true"
       
       - name: Terraform Destroy
         working-directory: ./infrastructure
         run: terraform destroy -auto-approve
         env:
-          TF_VAR_environment: ${{ secrets.ENVIRONMENT }}
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
