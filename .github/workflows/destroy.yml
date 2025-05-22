@@ -1,0 +1,98 @@
+name: Destroy Pricing Agent Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_region:
+        description: 'AWS Region to destroy resources in'
+        required: true
+        default: 'us-east-1'
+        type: choice
+        options:
+          - us-east-1
+          - us-east-2
+          - us-west-1
+          - us-west-2
+          - eu-west-1
+          - eu-central-1
+      confirmation:
+        description: 'Type "destroy" to confirm deletion of all resources'
+        required: true
+        type: string
+
+env:
+  AWS_REGION: ${{ github.event.inputs.aws_region || 'us-east-1' }}
+  TERRAFORM_VERSION: 1.5.7
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    
+    # Only run if confirmation is exactly "destroy"
+    if: ${{ github.event.inputs.confirmation == 'destroy' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: "Step 1: Find S3 Bucket for Terraform State"
+        run: |
+          # Find the S3 bucket for Terraform state
+          BUCKET_NAME="pricing-agent-tf-state-$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
+          
+          # Check if the bucket exists
+          if aws s3api head-bucket --bucket $BUCKET_NAME 2>/dev/null; then
+            echo "Found Terraform state bucket: $BUCKET_NAME"
+            echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
+          else
+            echo "Error: Could not find Terraform state bucket: $BUCKET_NAME"
+            exit 1
+          fi
+
+      - name: "Step 2: Initialize Terraform with S3 Backend"
+        working-directory: ./infrastructure
+        run: |
+          # Print environment variables for debugging
+          echo "Using S3 bucket: $TF_BUCKET_NAME"
+          echo "Using AWS region: $AWS_REGION"
+          
+          # Initialize with S3 backend
+          terraform init \
+            -backend-config="bucket=$TF_BUCKET_NAME" \
+            -backend-config="key=pricing-agent/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+
+      - name: "Step 3: Destroy Infrastructure"
+        working-directory: ./infrastructure
+        run: |
+          # Destroy all resources
+          terraform destroy -auto-approve
+
+      - name: "Step 4: Delete S3 Bucket (Optional)"
+        if: ${{ success() }}
+        run: |
+          # Ask user if they want to delete the S3 bucket
+          echo "Infrastructure has been destroyed successfully."
+          echo "The S3 bucket '$TF_BUCKET_NAME' containing the Terraform state still exists."
+          echo "To delete it manually, run: aws s3 rb s3://$TF_BUCKET_NAME --force"
+          
+          # Uncomment the following lines if you want to automatically delete the bucket
+          # echo "Emptying and deleting S3 bucket: $TF_BUCKET_NAME"
+          # aws s3 rm s3://$TF_BUCKET_NAME --recursive
+          # aws s3api delete-bucket --bucket $TF_BUCKET_NAME
