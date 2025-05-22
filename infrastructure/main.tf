@@ -30,49 +30,34 @@ terraform {
 # AWS Bedrock module for managing Bedrock resources
 module "bedrock" {
   source  = "aws-ia/bedrock/aws"
-  version = "0.0.13"
+  version = "0.0.20"
   
   # Agent configuration
-  create_agent = true
-  agent_name = local.name_prefix
-  agent_description = "AI agent for pricing compliance"
-  agent_instruction = local.bedrock_agent_instruction
   foundation_model = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
+  instruction = local.bedrock_agent_instruction
+  name = local.name_prefix
+  description = "AI agent for pricing compliance"
+  
+  # Create agent alias
+  create_agent_alias = true
+  alias_name = "${local.name_prefix}-alias"
   
   # Knowledge base configuration
-  create_knowledge_base = true
-  knowledge_base_name = "${local.name_prefix}-kb"
-  knowledge_base_description = "Knowledge base for pricing policies"
-  knowledge_base_role_name = "${local.name_prefix}-kb-role"
-  embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_embedding_model_id}"
-  
-  # S3 configuration for knowledge base
-  s3_bucket_name = aws_s3_bucket.pricing_policies.bucket
+  create_default_kb = true
+  create_s3_data_source = true
+  kb_name = "${local.name_prefix}-kb"
+  kb_description = "Knowledge base for pricing policies"
+  kb_instruction = "Use this knowledge base to answer questions about pricing policies and compliance rules."
+  embedding_model = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_embedding_model_id}"
+  s3_bucket = aws_s3_bucket.pricing_policies.bucket
   s3_prefix = "pricing-policies/"
   
-  # Action groups
-  action_groups = [
-    {
-      name = "InventoryTools"
-      description = "Tools for scanning inventory"
-      api_schema = local.inventory_tools_schema
-      action_group_executor = {
-        lambda = {
-          lambda_arn = aws_lambda_function.inventory_scanner.arn
-        }
-      }
-    },
-    {
-      name = "PricingTools"
-      description = "Tools for managing product prices"
-      api_schema = local.pricing_tools_schema
-      action_group_executor = {
-        lambda = {
-          lambda_arn = aws_lambda_function.pricing_tools.arn
-        }
-      }
-    }
-  ]
+  # Action group configuration
+  create_ag = true
+  ag_name = "PricingTools"
+  ag_description = "Tools for managing product prices and inventory"
+  ag_api_schema = local.pricing_tools_schema
+  ag_lambda_arn = aws_lambda_function.pricing_tools.arn
 }
 
 # Random string for unique resource naming
