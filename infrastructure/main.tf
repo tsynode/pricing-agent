@@ -18,21 +18,7 @@ terraform {
       version = "~> 1.35.0"
     }
   }
-  
-  # Uncomment this block to use Terraform Cloud for state management
-  # backend "remote" {
-  #   organization = "your-org-name"
-  #   workspaces {
-  #     name = "pricing-agent"
-  #   }
-  # }
-  
-  # Uncomment this block to use S3 for state management
-  # backend "s3" {
-  #   bucket = "your-terraform-state-bucket"
-  #   key    = "pricing-agent/terraform.tfstate"
-  #   region = "us-east-1"
-  # }
+  # Backend configuration is now in backend.tf
 }
 
 # Define local variables for Bedrock resources
