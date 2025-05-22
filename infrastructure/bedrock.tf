@@ -9,28 +9,16 @@ module "bedrock" {
   
   # Knowledge base configuration
   kb_name = "${local.name_prefix}-kb"
-  kb_description = "Knowledge base for pricing policies"
   instruction = "You are a pricing compliance agent who can provide detailed information about pricing policies and regulations."
   
   # S3 data source configuration
-  s3_data_source_name = "pricing-policies"
-  s3_data_source_description = "Pricing policies data source"
-  s3_bucket_name = aws_s3_bucket.policy.id
-  s3_bucket_arn = aws_s3_bucket.policy.arn
-  
-  # Chunking configuration
-  chunking_strategy = "FIXED_SIZE"
-  max_tokens = 300
-  overlap_percentage = 10
-  
-  # Embedding model
-  embedding_model = "amazon.titan-embed-text-v1"
-  
-  # IAM roles
-  iam_roles = [aws_iam_role.ecs_task.arn]
+  # The S3 bucket is referenced by ARN
+  kb_s3_data_source = aws_s3_bucket.policy.arn
   
   # Tags
-  tags = local.common_tags
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-kb"
+  })
 }
 
 # Store knowledge base ID in SSM Parameter Store
