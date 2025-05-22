@@ -302,10 +302,10 @@ jobs:
           LATEST_TASK_DEF_ARN=$(aws ecs describe-task-definition --task-definition pricing-agent-${ENVIRONMENT} --query "taskDefinition.taskDefinitionArn" --output text 2>/dev/null)
           
           # Check if service exists
-          SERVICE_ARN=$(aws ecs describe-services --cluster pricing-agent-${ENVIRONMENT}-cluster --services pricing-agent-${ENVIRONMENT}-service --query "services[0].serviceArn" --output text 2>/dev/null)
-          if [[ "$SERVICE_ARN" != "None" && -n "$SERVICE_ARN" && "$SERVICE_ARN" != *"error"* && "$SERVICE_ARN" != *"MISSING"* ]]; then
-            echo "Importing ECS service: $SERVICE_ARN"
-            terraform import aws_ecs_service.main $SERVICE_ARN || echo "Import failed"
+          SERVICE_EXISTS=$(aws ecs describe-services --cluster pricing-agent-${ENVIRONMENT}-cluster --services pricing-agent-${ENVIRONMENT}-service --query "services[0]" 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$SERVICE_EXISTS" != "NOT_FOUND" && "$SERVICE_EXISTS" != "null" ]]; then
+            echo "Importing ECS service using correct format: pricing-agent-${ENVIRONMENT}-cluster/pricing-agent-${ENVIRONMENT}-service"
+            terraform import aws_ecs_service.main pricing-agent-${ENVIRONMENT}-cluster/pricing-agent-${ENVIRONMENT}-service || echo "Import failed"
           fi
           
           # Apply the ECS service
