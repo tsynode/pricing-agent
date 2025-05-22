@@ -21,30 +21,43 @@ The Terraform configuration is organized by component:
 
 ## Terraform State Management
 
-This project uses an S3 backend with DynamoDB locking for Terraform state management.
+This project uses an S3 backend for Terraform state management.
 
 ### Bootstrap Process
 
 The first time you deploy, follow these steps:
 
-1. Create the state resources (S3 bucket and DynamoDB table):
-   ```
-   terraform apply -target=aws_s3_bucket.terraform_state -target=aws_dynamodb_table.terraform_locks
+1. Create an S3 bucket for Terraform state:
+   ```bash
+   # Create a unique bucket name
+   BUCKET_NAME="pricing-agent-tf-state-$(whoami)"
+   
+   # Create the S3 bucket
+   aws s3api create-bucket \
+     --bucket $BUCKET_NAME \
+     --region us-east-1
+   
+   # Enable versioning
+   aws s3api put-bucket-versioning \
+     --bucket $BUCKET_NAME \
+     --versioning-configuration Status=Enabled
+   
+   # Block public access
+   aws s3api put-public-access-block \
+     --bucket $BUCKET_NAME \
+     --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
    ```
 
-2. Note the outputs for bucket name and DynamoDB table name
-
-3. Initialize Terraform with the S3 backend:
-   ```
-   terraform init -force-copy \
-     -backend-config="bucket=<output_bucket_name>" \
+2. Initialize Terraform with the S3 backend:
+   ```bash
+   terraform init \
+     -backend-config="bucket=$BUCKET_NAME" \
      -backend-config="key=pricing-agent/terraform.tfstate" \
-     -backend-config="region=us-east-1" \
-     -backend-config="dynamodb_table=<output_table_name>"
+     -backend-config="region=us-east-1"
    ```
 
-4. Deploy the rest of the infrastructure:
-   ```
+3. Deploy the infrastructure:
+   ```bash
    terraform apply
    ```
 

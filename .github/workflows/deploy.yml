@@ -47,102 +47,61 @@ jobs:
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
-      - name: "Step 1: Temporarily Disable Backend for Bootstrap"
-        working-directory: ./infrastructure
+      - name: "Step 1: Create S3 Bucket for Terraform State"
         run: |
-          # Create a backup of the backend.tf file
-          cp backend.tf backend.tf.bak
+          # Create a unique bucket name with GitHub repository owner
+          BUCKET_NAME="pricing-agent-tf-state-$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
           
-          # Create a temporary file with backend disabled
-          cat > backend.tf << 'EOF'
-          # S3 Backend Configuration - Temporarily disabled for bootstrap
-          terraform {
-            # Backend configuration is commented out during initial setup
-            # backend "s3" {}
-          }
-          EOF
+          # Create S3 bucket for Terraform state if it doesn't exist
+          aws s3api head-bucket --bucket $BUCKET_NAME 2>/dev/null || \
+          aws s3api create-bucket \
+            --bucket $BUCKET_NAME \
+            --region ${{ env.AWS_REGION }} \
+            $([[ "${{ env.AWS_REGION }}" == "us-east-1" ]] || echo "--create-bucket-configuration LocationConstraint=${{ env.AWS_REGION }}")
+          
+          # Enable versioning on the bucket
+          aws s3api put-bucket-versioning \
+            --bucket $BUCKET_NAME \
+            --versioning-configuration Status=Enabled
+          
+          # Block public access to the bucket
+          aws s3api put-public-access-block \
+            --bucket $BUCKET_NAME \
+            --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+          
+          # Enable encryption on the bucket
+          aws s3api put-bucket-encryption \
+            --bucket $BUCKET_NAME \
+            --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
+          
+          # Save the bucket name for Terraform Init step
+          echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
+          
+          # Print the bucket name for debugging
+          echo "Using S3 bucket: $BUCKET_NAME"
       
-      - name: "Step 2: Initialize Terraform with Local Backend"
-        working-directory: ./infrastructure
-        run: terraform init
-      
-      - name: "Step 3: Create S3 Bucket and DynamoDB Table for State Management"
-        working-directory: ./infrastructure
-        run: |
-          # Create a temporary directory for state resources only
-          mkdir -p ../temp_state
-          cp terraform-state.tf ../temp_state/
-          cp variables.tf ../temp_state/
-          
-          # Create a minimal main.tf file with the random_string resource
-          cat > ../temp_state/main.tf << 'EOF'
-          provider "aws" {
-            region = var.aws_region
-          }
-          
-          # Random string for unique resource naming
-          resource "random_string" "suffix" {
-            length  = 8
-            special = false
-            upper   = false
-          }
-          
-          locals {
-            name_prefix = "${var.project_name}-${var.environment}"
-            common_tags = {
-              Project     = var.project_name
-              Environment = var.environment
-              ManagedBy   = "Terraform"
-            }
-          }
-          EOF
-          
-          # Initialize and apply in the temporary directory
-          cd ../temp_state
-          terraform init
-          terraform apply -auto-approve
-          
-          # Get the bucket and table names and set them as environment variables
-          echo "TF_BUCKET_NAME=$(terraform output -raw terraform_state_bucket)" >> $GITHUB_ENV
-          echo "TF_DYNAMODB_TABLE=$(terraform output -raw terraform_locks_table)" >> $GITHUB_ENV
-          
-          # Print the values for debugging
-          echo "Using S3 bucket: $(terraform output -raw terraform_state_bucket)"
-          echo "Using DynamoDB table: $(terraform output -raw terraform_locks_table)"
-          
-          # Clean up
-          cd ../infrastructure
-      
-      - name: "Step 4: Restore S3 Backend Configuration"
-        working-directory: ./infrastructure
-        run: |
-          # Restore the original backend.tf file
-          mv backend.tf.bak backend.tf
-      
-      - name: "Step 5: Initialize Terraform with S3 Backend"
+      - name: "Step 2: Initialize Terraform with S3 Backend"
         working-directory: ./infrastructure
         run: |
           # Print environment variables for debugging
           echo "Using S3 bucket: $TF_BUCKET_NAME"
-          echo "Using DynamoDB table: $TF_DYNAMODB_TABLE"
           echo "Using AWS region: $AWS_REGION"
           
           # Initialize with S3 backend
-          terraform init -force-copy \
+          terraform init \
             -backend-config="bucket=$TF_BUCKET_NAME" \
             -backend-config="key=pricing-agent/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -backend-config="dynamodb_table=$TF_DYNAMODB_TABLE"
+            -backend-config="region=$AWS_REGION"
 
-      - name: "Step 6: Validate Terraform Configuration"
+      - name: "Step 3: Validate Terraform Configuration"
         working-directory: ./infrastructure
         run: terraform validate
 
-      - name: "Step 7: Generate Terraform Plan"
+      - name: "Step 4: Generate Terraform Plan"
         working-directory: ./infrastructure
         run: terraform plan -out=tfplan
 
-      - name: "Step 8: Apply Terraform Changes"
+      - name: "Step 5: Apply Terraform Changes"
         working-directory: ./infrastructure
         run: terraform apply -auto-approve tfplan
 
