@@ -105,6 +105,17 @@ jobs:
           # Import IAM roles
           terraform import aws_iam_role.ecs_execution pricing-agent-${ENVIRONMENT}-ecs-execution-role || true
           terraform import aws_iam_role.ecs_task pricing-agent-${ENVIRONMENT}-ecs-task-role || true
+          
+          # Import ALB and related resources
+          terraform import aws_lb.main arn:aws:elasticloadbalancing:*:*:loadbalancer/app/pricing-agent-${ENVIRONMENT}-alb/* || true
+          terraform import aws_lb_listener.http arn:aws:elasticloadbalancing:*:*:listener/app/pricing-agent-${ENVIRONMENT}-alb/*/* || true
+          terraform import aws_security_group.alb pricing-agent-${ENVIRONMENT}-alb-sg || true
+          
+          # Import VPC resources
+          terraform import aws_vpc.main vpc-* || true
+          
+          # Note: For resources with wildcards, you may need to get the exact IDs from AWS console
+          # and update these import commands with the exact IDs
         env:
           ENVIRONMENT: ${{ env.ENVIRONMENT }}
       
