@@ -423,95 +423,18 @@ jobs:
       
       - name: Output Deployment Information
         run: |
-          echo "\n🎉 PRICING AGENT DEPLOYMENT COMPLETE 🎉\n"
-          echo "All components have been successfully deployed to AWS.\n"
-          
-          # Get important outputs from Terraform
+          # Get ALB DNS from Terraform
           cd infrastructure
+          ALB_DNS=$(terraform output alb_dns_name 2>/dev/null | tr -d '"' || echo 'Not available')
           
-          # Get outputs directly and store them in variables
-          # Use eval to ensure proper command execution and variable assignment
-          eval "ALB_DNS=$(terraform output alb_dns_name 2>/dev/null | tr -d '"' || echo 'Not available')"
-          eval "ECR_REPO=$(terraform output ecr_repository_url 2>/dev/null | tr -d '"' || echo 'Not available')"
-          eval "POLICY_BUCKET=$(terraform output policy_bucket_name 2>/dev/null | tr -d '"' || echo 'Not available')"
-          eval "SESSION_BUCKET=$(terraform output session_bucket_name 2>/dev/null | tr -d '"' || echo 'Not available')"
-          eval "INVENTORY_TABLE=$(terraform output inventory_table_name 2>/dev/null | tr -d '"' || echo 'Not available')"
-          eval "PRICING_TABLE=$(terraform output pricing_table_name 2>/dev/null | tr -d '"' || echo 'Not available')"
-          eval "ECS_CLUSTER=$(terraform output ecs_cluster_name 2>/dev/null | tr -d '"' || echo 'Not available')"
-          eval "ECS_SERVICE=$(terraform output ecs_service_name 2>/dev/null | tr -d '"' || echo 'pricing-agent-${ENVIRONMENT}-service')"
-          
-          # Print the variables to verify they're set correctly
-          echo "ALB DNS: $ALB_DNS"
-          echo "ECR Repository: $ECR_REPO"
-          echo "ECS Cluster: $ECS_CLUSTER"
-          
-          # Print deployment summary
-          echo "\n💻 APPLICATION ACCESS\n"
-          if [[ "$ALB_DNS" != "Not available" ]]; then
-            echo "Access your Streamlit application at: http://$ALB_DNS"
-            echo "(It may take a few minutes for the application to become available)"
-          else
-            echo "Load balancer DNS not available yet. Check the AWS Console for the ALB DNS name."
-          fi
-          
-          echo "\n💾 RESOURCE INFORMATION\n"
-          echo "Docker Image: $ECR_REPO:latest"
-          echo "ECS Cluster: $ECS_CLUSTER"
-          echo "ECS Service: $ECS_SERVICE"
-          echo "Load Balancer: $ALB_DNS"
-          
-          echo "\n📂 DATA STORAGE\n"
-          echo "Policy Bucket: $POLICY_BUCKET"
-          echo "Session Bucket: $SESSION_BUCKET"
-          echo "Inventory Table: $INVENTORY_TABLE"
-          echo "Pricing Rules Table: $PRICING_TABLE"
-          
-          echo "\n💡 NEXT STEPS\n"
-          if [[ "$ALB_DNS" != "Not available" ]]; then
-            echo "1. Access your Streamlit application at: http://$ALB_DNS"
-          else
-            echo "1. Access your Streamlit application (check AWS Console for ALB DNS name)"
-          fi
-          echo "2. Configure the Bedrock knowledge base separately"
-          echo "3. Update the SSM parameter with the actual knowledge base ID"
-          echo "4. Use the knowledge base sync script to populate the knowledge base"
-          
-          # Create a simple summary file for easy reference
-          echo "PRICING AGENT DEPLOYMENT SUMMARY" > deployment-summary.txt
-          echo "==============================" >> deployment-summary.txt
-          echo "" >> deployment-summary.txt
+          # Simple output with just the essential information
+          echo "\n🎉 PRICING AGENT DEPLOYMENT COMPLETE 🎉\n"
           
           if [[ "$ALB_DNS" != "Not available" ]]; then
-            echo "APPLICATION URL: http://$ALB_DNS" >> deployment-summary.txt
+            echo "APPLICATION URL: http://$ALB_DNS"
           else
-            echo "APPLICATION URL: Check AWS Console for ALB DNS name" >> deployment-summary.txt
+            echo "APPLICATION URL: Check AWS Console for ALB DNS name"
           fi
-          
-          echo "" >> deployment-summary.txt
-          echo "RESOURCES:" >> deployment-summary.txt
-          echo "- Docker Image: $ECR_REPO:latest" >> deployment-summary.txt
-          echo "- ECS Cluster: $ECS_CLUSTER" >> deployment-summary.txt
-          echo "- ECS Service: $ECS_SERVICE" >> deployment-summary.txt
-          
-          echo "" >> deployment-summary.txt
-          echo "DATA STORAGE:" >> deployment-summary.txt
-          echo "- Policy Bucket: $POLICY_BUCKET" >> deployment-summary.txt
-          echo "- Session Bucket: $SESSION_BUCKET" >> deployment-summary.txt
-          echo "- Inventory Table: $INVENTORY_TABLE" >> deployment-summary.txt
-          echo "- Pricing Rules Table: $PRICING_TABLE" >> deployment-summary.txt
-          
-          echo "" >> deployment-summary.txt
-          echo "Deployed on: $(date)" >> deployment-summary.txt
-          echo "Environment: ${ENVIRONMENT}" >> deployment-summary.txt
-          echo "Region: ${AWS_REGION}" >> deployment-summary.txt
-          
-          echo "\n📌 DEPLOYMENT DETAILS\n"
-          echo "Environment: ${ENVIRONMENT}"
-          echo "Region: ${AWS_REGION}"
-          echo "Deployment Time: $(date)"
-          echo "Summary file created: deployment-summary.txt"
-          
-          echo "\n👍 DEPLOYMENT SUCCESSFUL!\n"
         env:
           ENVIRONMENT: ${{ env.ENVIRONMENT }}
           AWS_REGION: ${{ env.AWS_REGION }}
