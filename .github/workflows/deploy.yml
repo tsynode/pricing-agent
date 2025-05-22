@@ -173,10 +173,9 @@ jobs:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
       
-      - name: Build and push Docker image
+      - name: Set ECR Repository URL
         if: github.ref != 'refs/heads/troubleshoot-terraform'
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
+        id: set-ecr-repo
         run: |
           # Get ECR repository URI from Terraform output
           ECR_REPO_URI=$(cd infrastructure && terraform output ecr_repository_url | tr -d '"')
@@ -184,16 +183,26 @@ jobs:
           # Check if ECR_REPO_URI is empty
           if [ -z "$ECR_REPO_URI" ]; then
             echo "ECR repository URL not found in Terraform outputs. Skipping Docker build and push."
+            echo "ecr_repo_uri=" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          # Login to ECR - make sure to extract just the domain part of the ECR URI
-          ECR_DOMAIN=$(echo $ECR_REPO_URI | cut -d'/' -f1)
-          aws ecr get-login-password --region $(echo $AWS_REGION) | docker login --username AWS --password-stdin $ECR_DOMAIN
-          
-          # Build and push Docker image
-          docker build -t $ECR_REPO_URI:latest .
-          docker push $ECR_REPO_URI:latest
+          echo "ecr_repo_uri=$ECR_REPO_URI" >> $GITHUB_OUTPUT
+          echo "Found ECR repository URL: $ECR_REPO_URI"
+      
+      - name: Login to Amazon ECR
+        if: steps.set-ecr-repo.outputs.ecr_repo_uri != ''
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Build and Push Docker Image
+        if: steps.set-ecr-repo.outputs.ecr_repo_uri != ''
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.set-ecr-repo.outputs.ecr_repo_uri }}:latest
+          no-cache: true
       
       - name: Update ECS service
         if: github.ref != 'refs/heads/troubleshoot-terraform'
