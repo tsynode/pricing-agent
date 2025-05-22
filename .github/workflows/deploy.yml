@@ -65,10 +65,10 @@ jobs:
         working-directory: ./infrastructure
         run: |
           terraform init \
-            -backend-config="bucket=${{ env.TF_BUCKET_NAME }}" \
+            -backend-config="bucket=${TF_BUCKET_NAME}" \
             -backend-config="key=pricing-agent/terraform.tfstate" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ env.TF_DYNAMODB_TABLE }}"
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_DYNAMODB_TABLE}"
 
       - name: Terraform Validate
         working-directory: ./infrastructure

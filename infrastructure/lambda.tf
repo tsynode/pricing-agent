@@ -225,16 +225,7 @@ resource "aws_iam_role_policy_attachment" "pricing_tools_lambda" {
   policy_arn = aws_iam_policy.pricing_tools_lambda.arn
 }
 
-# Attach Bedrock access policy to Lambda roles
-resource "aws_iam_role_policy_attachment" "inventory_scanner_bedrock_access" {
-  role       = aws_iam_role.inventory_scanner_lambda.name
-  policy_arn = aws_iam_policy.bedrock_access.arn
-}
-
-resource "aws_iam_role_policy_attachment" "pricing_tools_bedrock_access" {
-  role       = aws_iam_role.pricing_tools_lambda.name
-  policy_arn = aws_iam_policy.bedrock_access.arn
-}
+# Note: Bedrock policy attachments are defined in bedrock.tf
 
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "inventory_scanner" {
