@@ -234,7 +234,8 @@ jobs:
           
           # Get ECS cluster and service names
           ECS_CLUSTER=$(terraform output ecs_cluster_name 2>/dev/null | tr -d '"' || echo "Not available")
-          ECS_SERVICE=$(terraform output ecs_service_name 2>/dev/null | tr -d '"' || echo "Not available")
+          # For ECS service, we know the naming convention even if the output isn't available
+          ECS_SERVICE=$(terraform output ecs_service_name 2>/dev/null | tr -d '"' || echo "pricing-agent-${ENVIRONMENT}-service")
           
           # Print deployment summary
           echo "\n💻 APPLICATION ACCESS\n"
