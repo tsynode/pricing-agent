@@ -47,10 +47,29 @@ jobs:
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
+      - name: Temporarily Disable Backend
+        working-directory: ./infrastructure
+        run: |
+          # Create a backup of the backend.tf file
+          cp backend.tf backend.tf.bak
+          
+          # Create a temporary file with backend disabled
+          cat > backend.tf << 'EOF'
+          # S3 Backend Configuration - Temporarily disabled for bootstrap
+          terraform {
+            # Backend configuration is commented out during initial setup
+            # backend "s3" {}
+          }
+          EOF
+      
+      - name: Initialize Terraform with Local Backend
+        working-directory: ./infrastructure
+        run: terraform init
+      
       - name: Create Terraform State Resources
         working-directory: ./infrastructure
         run: |
-          # First create the state bucket and DynamoDB table
+          # Create the state bucket and DynamoDB table
           terraform apply -target=aws_s3_bucket.terraform_state -target=aws_dynamodb_table.terraform_locks -auto-approve
           
           # Get the bucket and table names
@@ -60,11 +79,17 @@ jobs:
           # Save these as environment variables for later steps
           echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
           echo "TF_DYNAMODB_TABLE=$DYNAMODB_TABLE" >> $GITHUB_ENV
-          
-      - name: Terraform Init with S3 Backend
+      
+      - name: Restore Backend Configuration
         working-directory: ./infrastructure
         run: |
-          terraform init \
+          # Restore the original backend.tf file
+          mv backend.tf.bak backend.tf
+      
+      - name: Initialize with S3 Backend
+        working-directory: ./infrastructure
+        run: |
+          terraform init -force-copy \
             -backend-config="bucket=${TF_BUCKET_NAME}" \
             -backend-config="key=pricing-agent/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
