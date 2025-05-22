@@ -52,14 +52,14 @@ The system is built on AWS services with a serverless architecture:
 
 #### Bedrock Resources
 
-AWS Bedrock resources (Agent, Knowledge Base, etc.) are automatically deployed as part of the infrastructure using the AWS Bedrock Terraform module. The deployment includes:
+AWS Bedrock resources (Agent, Knowledge Base, etc.) are automatically deployed as part of the infrastructure using the AWS Cloud Control (AWSCC) provider. The deployment includes:
 
-- A Bedrock Knowledge Base for pricing policies with S3 data source integration
+- A Bedrock Knowledge Base for pricing policies with OpenSearch Serverless integration
 - A Bedrock Agent using Claude 3.7 Sonnet model
 - Action groups for inventory and pricing tools connected to Lambda functions
 - Agent alias for deployment
 
-No manual setup is required for Bedrock resources - everything is handled through the GitHub Actions workflow.
+No manual setup is required for Bedrock resources - everything is handled through the GitHub Actions workflow using native Terraform resources.
    - `AWS_SESSION_TOKEN` (optional, for temporary credentials)
 3. Either:
    - Push to the main branch to trigger automatic deployment, or

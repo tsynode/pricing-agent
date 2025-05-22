@@ -2,227 +2,88 @@
 # Amazon Bedrock Configuration
 ###########################
 
-# Instead of creating Bedrock resources directly with Terraform,
-# we'll define local variables to store the resource information
-# and use them in other resources like Lambda and ECS
+# Use the AWSCC provider to create Bedrock resources directly with Terraform
 
-locals {
-  # Bedrock model ARNs
-  bedrock_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
-  bedrock_embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_embedding_model_id}"
+# Create a Bedrock Knowledge Base
+resource "awscc_bedrock_knowledge_base" "pricing_kb" {
+  name        = local.bedrock_knowledge_base_name
+  description = "Knowledge base for pricing policies and compliance rules"
   
-  # Bedrock resource names (to be created manually or via script)
-  bedrock_knowledge_base_name = "${local.name_prefix}-pricing-policies-kb"
-  bedrock_agent_name = "${local.name_prefix}-pricing-agent"
-  bedrock_agent_alias_name = "${local.name_prefix}-pricing-agent-alias"
-  
-  # Bedrock agent instruction
-  bedrock_agent_instruction = <<-EOT
-    You are a pricing compliance specialist responsible for ensuring all product prices align with company policies.
-
-    Your capabilities:
-    1. Access pricing policies via Knowledge Base search
-    2. Retrieve current item prices using get_item_price()
-    3. Update non-compliant prices using update_price()
-    4. Assess individual or bulk item compliance
-
-    When processing requests:
-    1. Always check current pricing policies first
-    2. Retrieve item details and current prices
-    3. Compare against applicable policies
-    4. Update prices only when non-compliant
-    5. Provide detailed reasoning for all changes
-
-    Response format: Provide summary of actions taken and reasoning for each price change.
-  EOT
-  
-  # API schemas for action groups (to be used in manual creation or scripts)
-  inventory_tools_schema = jsonencode({
-    openapi = "3.0.0"
-    info = {
-      title   = "Inventory Tools API"
-      version = "1.0.0"
+  knowledge_base_configuration {
+    type = "VECTOR"
+    vector_knowledge_base_configuration {
+      embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_embedding_model_id}"
     }
-    paths = {
-      "/scan_inventory" = {
-        post = {
-          operationId = "scan_inventory"
-          summary     = "Scan inventory for pricing compliance"
-          description = "Scans the entire inventory and creates batches for processing"
-          requestBody = {
-            required = true
-            content = {
-              "application/json" = {
-                schema = {
-                  type = "object"
-                  properties = {
-                    category = {
-                      type        = "string"
-                      description = "Optional category to filter inventory items"
-                    }
-                  }
-                }
-              }
-            }
-          }
-          responses = {
-            "200" = {
-              description = "Successful operation"
-              content = {
-                "application/json" = {
-                  schema = {
-                    type = "object"
-                    properties = {
-                      batches_created = {
-                        type        = "integer"
-                        description = "Number of batches created"
-                      }
-                      total_items = {
-                        type        = "integer"
-                        description = "Total number of items processed"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+  }
+  
+  storage_configuration {
+    type = "OPENSEARCH_SERVERLESS"
+    opensearch_serverless_configuration {
+      collection_arn = aws_opensearchserverless_collection.pricing_kb.arn
+      vector_index_name = "pricing-vector-index"
+      field_mapping {
+        metadata_field = "metadata"
+        text_field = "text"
+        vector_field = "vector_embedding"
       }
     }
-  })
+  }
   
-  pricing_tools_schema = jsonencode({
-    openapi = "3.0.0"
-    info = {
-      title   = "Pricing Tools API"
-      version = "1.0.0"
-    }
-    paths = {
-      "/get_item_price" = {
-        post = {
-          operationId = "get_item_price"
-          summary     = "Get current price and metadata for an item"
-          description = "Retrieves the current price and related information for a specific item"
-          requestBody = {
-            required = true
-            content = {
-              "application/json" = {
-                schema = {
-                  type = "object"
-                  properties = {
-                    item_id = {
-                      type        = "string"
-                      description = "Product identifier"
-                    }
-                  }
-                  required = ["item_id"]
-                }
-              }
-            }
-          }
-          responses = {
-            "200" = {
-              description = "Successful operation"
-              content = {
-                "application/json" = {
-                  schema = {
-                    type = "object"
-                    properties = {
-                      item_id = {
-                        type        = "string"
-                        description = "Product identifier"
-                      }
-                      current_price = {
-                        type        = "number"
-                        description = "Current price of the item"
-                      }
-                      category = {
-                        type        = "string"
-                        description = "Product category"
-                      }
-                      last_updated = {
-                        type        = "string"
-                        description = "Last price update timestamp"
-                      }
-                      cost = {
-                        type        = "number"
-                        description = "Product cost"
-                      }
-                      margin_percent = {
-                        type        = "number"
-                        description = "Current margin percentage"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "/update_price" = {
-        post = {
-          operationId = "update_price"
-          summary     = "Update item price with audit trail"
-          description = "Updates the price of an item and records the reason for the change"
-          requestBody = {
-            required = true
-            content = {
-              "application/json" = {
-                schema = {
-                  type = "object"
-                  properties = {
-                    item_id = {
-                      type        = "string"
-                      description = "Product identifier"
-                    }
-                    new_price = {
-                      type        = "number"
-                      description = "New price to set"
-                    }
-                    reason = {
-                      type        = "string"
-                      description = "AI agent's reasoning for change"
-                    }
-                  }
-                  required = ["item_id", "new_price", "reason"]
-                }
-              }
-            }
-          }
-          responses = {
-            "200" = {
-              description = "Successful operation"
-              content = {
-                "application/json" = {
-                  schema = {
-                    type = "object"
-                    properties = {
-                      success = {
-                        type        = "boolean"
-                        description = "Whether the update was successful"
-                      }
-                      old_price = {
-                        type        = "number"
-                        description = "Previous price"
-                      }
-                      new_price = {
-                        type        = "number"
-                        description = "Updated price"
-                      }
-                      updated_at = {
-                        type        = "string"
-                        description = "Timestamp of the update"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+  role_arn = aws_iam_role.bedrock_service.arn
+}
+
+# Create an OpenSearch Serverless Collection for the Knowledge Base
+resource "aws_opensearchserverless_collection" "pricing_kb" {
+  name = "${local.name_prefix}-kb-collection"
+  type = "VECTORSEARCH"
+}
+
+# Create a Bedrock Agent
+resource "awscc_bedrock_agent" "pricing_agent" {
+  name        = local.bedrock_agent_name
+  description = "AI agent for pricing compliance"
+  
+  agent_resource_role_arn = aws_iam_role.bedrock_service.arn
+  foundation_model       = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
+  instruction            = local.bedrock_agent_instruction
+  
+  # Associate the Knowledge Base with the Agent
+  knowledge_base_associations {
+    knowledge_base_id = awscc_bedrock_knowledge_base.pricing_kb.id
+    description      = "Pricing policies knowledge base"
+  }
+  
+  # Create Action Groups for the Agent
+  action_group {
+    action_group_name = "InventoryTools"
+    description      = "Tools for scanning inventory"
+    action_group_executor {
+      lambda {
+        lambda_arn = aws_lambda_function.inventory_scanner.arn
       }
     }
-  })
+    api_schema = local.inventory_tools_schema
+  }
+  
+  action_group {
+    action_group_name = "PricingTools"
+    description      = "Tools for managing product prices"
+    action_group_executor {
+      lambda {
+        lambda_arn = aws_lambda_function.pricing_tools.arn
+      }
+    }
+    api_schema = local.pricing_tools_schema
+  }
+}
+
+# Create a Bedrock Agent Alias
+resource "awscc_bedrock_agent_alias" "pricing_agent_alias" {
+  agent_id    = awscc_bedrock_agent.pricing_agent.id
+  name        = local.bedrock_agent_alias_name
+  description = "Production alias for pricing agent"
+  
+  routing_configuration {
+    agent_version = "DRAFT"
+  }
 }

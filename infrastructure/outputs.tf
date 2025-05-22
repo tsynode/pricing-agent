@@ -35,17 +35,17 @@ output "s3_bucket_name" {
 
 output "bedrock_agent_id" {
   description = "ID of the Bedrock agent"
-  value       = module.bedrock.agent_id
+  value       = awscc_bedrock_agent.pricing_agent.id
 }
 
 output "bedrock_agent_alias_id" {
   description = "ID of the Bedrock agent alias"
-  value       = module.bedrock.agent_alias_id
+  value       = awscc_bedrock_agent_alias.pricing_agent_alias.id
 }
 
 output "bedrock_knowledge_base_id" {
   description = "ID of the Bedrock knowledge base"
-  value       = module.bedrock.knowledge_base_id
+  value       = awscc_bedrock_knowledge_base.pricing_kb.id
 }
 
 output "bedrock_model_id" {

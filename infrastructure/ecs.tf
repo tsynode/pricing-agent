@@ -73,15 +73,15 @@ resource "aws_ecs_task_definition" "streamlit" {
         },
         {
           name  = "BEDROCK_AGENT_ID"
-          value = module.bedrock.agent_id
+          value = awscc_bedrock_agent.pricing_agent.id
         },
         {
           name  = "BEDROCK_AGENT_ALIAS_ID"
-          value = module.bedrock.agent_alias_id
+          value = awscc_bedrock_agent_alias.pricing_agent_alias.id
         },
         {
           name  = "BEDROCK_KNOWLEDGE_BASE_ID"
-          value = module.bedrock.knowledge_base_id
+          value = awscc_bedrock_knowledge_base.pricing_kb.id
         }
       ]
       

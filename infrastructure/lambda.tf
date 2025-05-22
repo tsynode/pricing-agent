@@ -82,9 +82,9 @@ resource "aws_lambda_function" "batch_processor" {
     variables = {
       BEDROCK_MODEL_ID = var.bedrock_model_id
       BEDROCK_EMBEDDING_MODEL_ID = var.bedrock_embedding_model_id
-      BEDROCK_AGENT_ID = module.bedrock.agent_id
-      BEDROCK_AGENT_ALIAS_ID = module.bedrock.agent_alias_id
-      BEDROCK_KNOWLEDGE_BASE_ID = module.bedrock.knowledge_base_id
+      BEDROCK_AGENT_ID = awscc_bedrock_agent.pricing_agent.id
+      BEDROCK_AGENT_ALIAS_ID = awscc_bedrock_agent_alias.pricing_agent_alias.id
+      BEDROCK_KNOWLEDGE_BASE_ID = awscc_bedrock_knowledge_base.pricing_kb.id
       AWS_REGION = var.aws_region
     }
   }
