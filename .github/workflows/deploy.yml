@@ -69,8 +69,38 @@ jobs:
       - name: Create Terraform State Resources
         working-directory: ./infrastructure
         run: |
-          # Create the state bucket and DynamoDB table
-          terraform apply -target=aws_s3_bucket.terraform_state -target=aws_dynamodb_table.terraform_locks -auto-approve
+          # Create a temporary directory for state resources only
+          mkdir -p ../temp_state
+          cp terraform-state.tf ../temp_state/
+          cp variables.tf ../temp_state/
+          
+          # Create a minimal main.tf file with the random_string resource
+          cat > ../temp_state/main.tf << 'EOF'
+          provider "aws" {
+            region = var.aws_region
+          }
+          
+          # Random string for unique resource naming
+          resource "random_string" "suffix" {
+            length  = 8
+            special = false
+            upper   = false
+          }
+          
+          locals {
+            name_prefix = "${var.project_name}-${var.environment}"
+            common_tags = {
+              Project     = var.project_name
+              Environment = var.environment
+              ManagedBy   = "Terraform"
+            }
+          }
+          EOF
+          
+          # Initialize and apply in the temporary directory
+          cd ../temp_state
+          terraform init
+          terraform apply -auto-approve
           
           # Get the bucket and table names
           BUCKET_NAME=$(terraform output -raw terraform_state_bucket)
@@ -79,6 +109,9 @@ jobs:
           # Save these as environment variables for later steps
           echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
           echo "TF_DYNAMODB_TABLE=$DYNAMODB_TABLE" >> $GITHUB_ENV
+          
+          # Clean up
+          cd ../infrastructure
       
       - name: Restore Backend Configuration
         working-directory: ./infrastructure
