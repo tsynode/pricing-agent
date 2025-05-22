@@ -97,13 +97,31 @@ jobs:
         working-directory: ./infrastructure
         run: terraform validate
 
-      - name: "Step 4: Generate Terraform Plan"
-        working-directory: ./infrastructure
-        run: terraform plan -out=tfplan
+      - name: "Step 4: Run terraform plan"
+        run: |
+          cd infrastructure
+          terraform plan -input=false -detailed-exitcode -out=tfplan || echo "Plan failed with exit code $?"
+          
+          # Output a summary of the plan
+          echo "\n\n==== PLAN SUMMARY ===="
+          terraform show -no-color tfplan | grep -E '^[[:space:]]*(\+|-|~)' | head -n 50 || echo "No plan summary available"
 
       - name: "Step 5: Apply Terraform Changes"
         working-directory: ./infrastructure
-        run: terraform apply -auto-approve tfplan
+        run: |
+          # Set TF_LOG for more detailed output
+          export TF_LOG=INFO
+          
+          # Apply with error handling
+          terraform apply -auto-approve tfplan || {
+            echo "\n\n==== ERROR DETAILS ===="
+            echo "Terraform apply failed. Checking for specific resource errors..."
+            
+            # Try to extract more specific error information
+            terraform state list 2>/dev/null || echo "No state available"
+            
+            exit 1
+          }
 
       - name: Get ECR Repository URL
         id: ecr
