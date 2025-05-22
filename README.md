@@ -15,7 +15,7 @@ This application helps ensure products are priced correctly according to company
 
 ### Current Implementation (Stage 1)
 
-![Current Architecture](docs/images/current_architecture.png)
+![Current Architecture](docs/images/architecture_pricing_agent-Minimal.drawio.png)
 
 Our current implementation focuses on simplicity and core functionality:
 
@@ -28,7 +28,7 @@ This architecture provides a clean, maintainable implementation that delivers th
 
 ### Target Architecture (Future)
 
-![Target Architecture](docs/images/target_architecture.png)
+![Target Architecture](docs/images/architecture_pricing_agent-Scalable.drawio.png)
 
 The target architecture adds scalability for handling large inventories:
 
@@ -41,7 +41,7 @@ This architecture will be implemented incrementally as inventory size grows and 
 
 ### CI/CD Pipeline
 
-![CI/CD Pipeline](docs/images/cicd_pipeline.png)
+<!-- CI/CD Pipeline diagram will be added soon -->
 
 Our deployment process is fully automated:
 
