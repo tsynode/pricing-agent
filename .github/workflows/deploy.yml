@@ -275,9 +275,20 @@ jobs:
           # Apply ECS resources (cluster, task definition, service)
           echo "\n🐳 Applying ECS resources...\n"
           
-          # Apply ECS cluster
-          echo "Applying ECS cluster..."
-          terraform apply -auto-approve -target=aws_ecs_cluster.main
+          # Check for existing CloudWatch Log Group
+          echo "Checking for existing CloudWatch Log Group..."
+          LOG_GROUP_EXISTS=$(aws logs describe-log-groups --log-group-name-prefix "/ecs/pricing-agent-${ENVIRONMENT}" 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$LOG_GROUP_EXISTS" != "NOT_FOUND" ]]; then
+            LOG_GROUP_NAME=$(echo "$LOG_GROUP_EXISTS" | jq -r '.logGroups[0].logGroupName')
+            if [[ -n "$LOG_GROUP_NAME" && "$LOG_GROUP_NAME" != "null" ]]; then
+              echo "Importing existing CloudWatch Log Group: $LOG_GROUP_NAME"
+              terraform import aws_cloudwatch_log_group.main "$LOG_GROUP_NAME" || echo "Import failed, but continuing"
+            fi
+          fi
+          
+          # Apply ECS cluster and CloudWatch Log Group
+          echo "Applying ECS cluster and CloudWatch Log Group..."
+          terraform apply -auto-approve -target=aws_ecs_cluster.main -target=aws_cloudwatch_log_group.main || echo "Some ECS resources already exist, continuing with other resources"
           
           # Apply ECS task definition
           echo "Applying ECS task definition..."

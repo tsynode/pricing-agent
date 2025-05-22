@@ -121,6 +121,15 @@ resource "aws_cloudwatch_log_group" "main" {
   name              = "/ecs/${local.name_prefix}"
   retention_in_days = 30
   
+  # Prevent conflicts with existing log groups
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      retention_in_days,
+      kms_key_id
+    ]
+  }
+  
   tags = local.common_tags
 }
 
