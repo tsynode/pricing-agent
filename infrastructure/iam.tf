@@ -298,37 +298,4 @@ resource "aws_iam_role_policy_attachment" "pricing_tools_lambda" {
   policy_arn = aws_iam_policy.pricing_tools_lambda.arn
 }
 
-###########################
-# Bedrock IAM Roles
-###########################
-
-# The Bedrock service role and policies are now defined in bedrock_iam.tf
-
-# Additional S3 permissions for Bedrock service
-resource "aws_iam_policy" "bedrock_s3_access" {
-  name        = "${local.name_prefix}-bedrock-s3-access"
-  description = "S3 access policy for Bedrock service"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.pricing_policies.arn,
-          "${aws_s3_bucket.pricing_policies.arn}/*"
-        ]
-      }
-    ]
-  })
-}
-
-# Attach S3 access policy to Bedrock service role
-resource "aws_iam_role_policy_attachment" "bedrock_s3_access" {
-  role       = aws_iam_role.bedrock_service.name
-  policy_arn = aws_iam_policy.bedrock_s3_access.arn
-}
+# Note: All Bedrock IAM resources have been moved to bedrock.tf for better organization
