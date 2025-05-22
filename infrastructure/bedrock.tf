@@ -295,9 +295,7 @@ resource "awscc_bedrock_agent" "pricing_agent" {
       action_group_name = "InventoryTools"
       description     = "Tools for scanning inventory"
       action_group_executor = {
-        lambda = {
-          lambda_arn = aws_lambda_function.inventory_scanner.arn
-        }
+        lambda = aws_lambda_function.inventory_scanner.arn
       }
       api_schema = local.inventory_tools_schema
     },
@@ -305,21 +303,13 @@ resource "awscc_bedrock_agent" "pricing_agent" {
       action_group_name = "PricingTools"
       description     = "Tools for managing product prices"
       action_group_executor = {
-        lambda = {
-          lambda_arn = aws_lambda_function.pricing_tools.arn
-        }
+        lambda = aws_lambda_function.pricing_tools.arn
       }
       api_schema = local.pricing_tools_schema
     }
   ]
   
-  # Associate the knowledge base with the agent
-  knowledge_base_associations = [
-    {
-      knowledge_base_id = awscc_bedrock_knowledge_base.pricing_kb.id
-      description = "Knowledge base for pricing policies and compliance"
-    }
-  ]
+  # Note: Knowledge base associations are created with a separate resource below
 }
 
 # Create a Bedrock Agent Alias
@@ -331,6 +321,13 @@ resource "awscc_bedrock_agent_alias" "pricing_agent_alias" {
   routing_configuration = {
     agent_version = "DRAFT"
   }
+}
+
+# Associate the knowledge base with the agent
+resource "awscc_bedrock_agent_knowledge_base" "pricing_kb_association" {
+  agent_id        = awscc_bedrock_agent.pricing_agent.id
+  knowledge_base_id = awscc_bedrock_knowledge_base.pricing_kb.id
+  description     = "Knowledge base for pricing policies and compliance"
 }
 
 # Add Lambda permission for Bedrock Agent
