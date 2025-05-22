@@ -102,13 +102,13 @@ jobs:
           terraform init
           terraform apply -auto-approve
           
-          # Get the bucket and table names
-          BUCKET_NAME=$(terraform output -raw terraform_state_bucket)
-          DYNAMODB_TABLE=$(terraform output -raw terraform_locks_table)
+          # Get the bucket and table names and set them as environment variables
+          echo "TF_BUCKET_NAME=$(terraform output -raw terraform_state_bucket)" >> $GITHUB_ENV
+          echo "TF_DYNAMODB_TABLE=$(terraform output -raw terraform_locks_table)" >> $GITHUB_ENV
           
-          # Save these as environment variables for later steps
-          echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
-          echo "TF_DYNAMODB_TABLE=$DYNAMODB_TABLE" >> $GITHUB_ENV
+          # Print the values for debugging
+          echo "Using S3 bucket: $(terraform output -raw terraform_state_bucket)"
+          echo "Using DynamoDB table: $(terraform output -raw terraform_locks_table)"
           
           # Clean up
           cd ../infrastructure
@@ -122,11 +122,17 @@ jobs:
       - name: "Step 5: Initialize Terraform with S3 Backend"
         working-directory: ./infrastructure
         run: |
+          # Print environment variables for debugging
+          echo "Using S3 bucket: $TF_BUCKET_NAME"
+          echo "Using DynamoDB table: $TF_DYNAMODB_TABLE"
+          echo "Using AWS region: $AWS_REGION"
+          
+          # Initialize with S3 backend
           terraform init -force-copy \
-            -backend-config="bucket=${TF_BUCKET_NAME}" \
+            -backend-config="bucket=$TF_BUCKET_NAME" \
             -backend-config="key=pricing-agent/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="dynamodb_table=${TF_DYNAMODB_TABLE}"
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="dynamodb_table=$TF_DYNAMODB_TABLE"
 
       - name: "Step 6: Validate Terraform Configuration"
         working-directory: ./infrastructure
