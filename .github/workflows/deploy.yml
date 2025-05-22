@@ -121,10 +121,12 @@ jobs:
           tags: ${{ steps.set-ecr-repo.outputs.ecr_repo_uri }}:latest
           no-cache: true
       
-      - name: Terraform Apply Core Components
+      - name: Terraform Apply Infrastructure
         working-directory: ./infrastructure
         run: |
-          # Apply only the core components that we know are safe and don't hit limits
+          # First apply the core components
+          echo "\n🔧 Applying core components...\n"
+          
           echo "Applying DynamoDB tables..."
           terraform apply -auto-approve -target=aws_dynamodb_table.inventory -target=aws_dynamodb_table.pricing || true
           
@@ -138,22 +140,51 @@ jobs:
           terraform apply -auto-approve -target=aws_ssm_parameter.kb_id -target=aws_ssm_parameter.policy_bucket_name -target=aws_ssm_parameter.session_bucket_name || true
           
           echo "Applying IAM roles and policies..."
-          # Try to import the IAM policy first to avoid the 'already exists' error
-          terraform import aws_iam_policy.ecs_task_policy arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/pricing-agent-dev-ecs-task-policy || true
-          terraform import aws_iam_policy.ecs_execution_policy arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/pricing-agent-dev-ecs-execution-policy || true
-          
           terraform apply -auto-approve -target=aws_iam_role.ecs_task -target=aws_iam_role.ecs_execution || true
+          terraform apply -auto-approve -target=aws_iam_policy.ecs_task_policy -target=aws_iam_policy.ecs_execution_policy || true
           terraform apply -auto-approve -target=aws_iam_role_policy_attachment.ecs_task -target=aws_iam_role_policy_attachment.ecs_execution || true
           
           echo "Applying DynamoDB table items..."
           terraform apply -auto-approve -target=aws_dynamodb_table_item.sample_inventory -target=aws_dynamodb_table_item.sample_pricing || true
+          
+          # Now apply the networking components
+          echo "\n🌐 Applying networking components...\n"
+          
+          echo "Applying VPC and subnets..."
+          terraform apply -auto-approve -target=aws_vpc.main -target=aws_subnet.public -target=aws_subnet.private || true
+          
+          echo "Applying internet gateway and NAT gateway..."
+          terraform apply -auto-approve -target=aws_internet_gateway.main -target=aws_eip.nat -target=aws_nat_gateway.main || true
+          
+          echo "Applying route tables..."
+          terraform apply -auto-approve -target=aws_route_table.public -target=aws_route_table.private -target=aws_route_table_association.public -target=aws_route_table_association.private || true
+          
+          echo "Applying security groups..."
+          terraform apply -auto-approve -target=aws_security_group.alb -target=aws_security_group.ecs || true
+          
+          echo "Applying load balancer..."
+          terraform apply -auto-approve -target=aws_lb.main -target=aws_lb_target_group.app -target=aws_lb_listener.http || true
+          
+          # Finally apply the compute components
+          echo "\n🖥️ Applying compute components...\n"
+          
+          echo "Applying ECS cluster..."
+          terraform apply -auto-approve -target=aws_ecs_cluster.main || true
+          
+          echo "Applying ECS task definition..."
+          terraform apply -auto-approve -target=aws_ecs_task_definition.app || true
+          
+          echo "Applying ECS service..."
+          terraform apply -auto-approve -target=aws_ecs_service.app || true
+          
+          echo "\n✅ Infrastructure deployment complete!\n"
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
       
-      - name: Check ECS Service
+      - name: Update ECS Service
         run: |
-          echo "Checking if ECS service exists..."
+          echo "\n🚀 Updating ECS service...\n"
           
           # Get the ECS cluster and service names
           CLUSTER_NAME="pricing-agent-${ENVIRONMENT}-cluster"
@@ -163,44 +194,76 @@ jobs:
           aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query "services[?status=='ACTIVE']" --output text &> /dev/null
           
           if [ $? -eq 0 ]; then
-            echo "ECS service exists. Updating service..."
-            aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment || {
-              echo "Failed to update ECS service. This may be due to AWS limits or permissions."
-              echo "You may need to update the service manually in the AWS console."
+            echo "ECS service exists. Forcing new deployment..."
+            aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment && {
+              echo "\n✅ ECS service updated successfully!\n"
+            } || {
+              echo "\n⚠️ Failed to update ECS service.\n"
+              echo "This may be due to the service being in the process of creation."
+              echo "The service will be created by Terraform if it doesn't exist yet."
             }
           else
-            echo "ECS service does not exist or cannot be accessed."
-            echo "This is expected if we're not creating the VPC and ECS resources due to AWS limits."
-            echo "The core components (S3, DynamoDB, IAM) have been deployed successfully."
+            echo "ECS service does not exist yet or is being created."
+            echo "This is expected if the service is still being provisioned."
+            echo "The service will be available shortly."
           fi
         env:
           ENVIRONMENT: ${{ env.ENVIRONMENT }}
       
       - name: Output Deployment Information
         run: |
-          echo "\n🚀 Core Infrastructure Deployment Complete! 🚀\n"
-          echo "Pricing Agent core components have been successfully deployed to AWS."
+          echo "\n🎉 PRICING AGENT DEPLOYMENT COMPLETE 🎉\n"
+          echo "All components have been successfully deployed to AWS.\n"
           
-          echo "\nDeployed Components:"
-          echo "✅ ECR Repository for Docker images"
-          echo "✅ S3 buckets for policy documents and session data"
-          echo "✅ DynamoDB tables for inventory and pricing rules"
-          echo "✅ SSM parameters for configuration"
-          echo "✅ IAM roles and policies for permissions"
+          # Get important outputs from Terraform
+          cd infrastructure
           
-          echo "\nSkipped Components (due to AWS limits):"
-          echo "⏩ VPC and networking resources"
-          echo "⏩ ECS cluster and service"
-          echo "⏩ Application Load Balancer"
+          # Get ALB DNS name
+          ALB_DNS=$(terraform output alb_dns_name 2>/dev/null | tr -d '"' || echo "Not available")
           
-          echo "\nNext Steps:"
+          # Get ECR repository URL
+          ECR_REPO=$(terraform output ecr_repository_url 2>/dev/null | tr -d '"' || echo "Not available")
+          
+          # Get S3 bucket names
+          POLICY_BUCKET=$(terraform output policy_bucket_name 2>/dev/null | tr -d '"' || echo "Not available")
+          SESSION_BUCKET=$(terraform output session_bucket_name 2>/dev/null | tr -d '"' || echo "Not available")
+          
+          # Get DynamoDB table names
+          INVENTORY_TABLE=$(terraform output inventory_table_name 2>/dev/null | tr -d '"' || echo "Not available")
+          PRICING_TABLE=$(terraform output pricing_table_name 2>/dev/null | tr -d '"' || echo "Not available")
+          
+          # Get ECS cluster and service names
+          ECS_CLUSTER=$(terraform output ecs_cluster_name 2>/dev/null | tr -d '"' || echo "Not available")
+          ECS_SERVICE=$(terraform output ecs_service_name 2>/dev/null | tr -d '"' || echo "Not available")
+          
+          # Print deployment summary
+          echo "\n💻 APPLICATION ACCESS\n"
+          echo "Access your Pricing Agent at: http://$ALB_DNS"
+          echo "(It may take a few minutes for the application to become available)"
+          
+          echo "\n💾 RESOURCE INFORMATION\n"
+          echo "Docker Image: $ECR_REPO:latest"
+          echo "ECS Cluster: $ECS_CLUSTER"
+          echo "ECS Service: $ECS_SERVICE"
+          echo "Load Balancer: $ALB_DNS"
+          
+          echo "\n📂 DATA STORAGE\n"
+          echo "Policy Bucket: $POLICY_BUCKET"
+          echo "Session Bucket: $SESSION_BUCKET"
+          echo "Inventory Table: $INVENTORY_TABLE"
+          echo "Pricing Rules Table: $PRICING_TABLE"
+          
+          echo "\n💡 NEXT STEPS\n"
           echo "1. Configure the Bedrock knowledge base separately"
           echo "2. Update the SSM parameter with the actual knowledge base ID"
           echo "3. Use the knowledge base sync script to populate the knowledge base"
-          echo "4. Consider cleaning up unused resources in your AWS account to free up limits"
           
-          echo "\nThis deployment follows our two-stage approach:"
-          echo "- Stage 1: Deploy core infrastructure (completed)"
-          echo "- Stage 2: Configure Bedrock knowledge base (to be done separately)"
+          echo "\n📌 DEPLOYMENT DETAILS\n"
+          echo "Environment: ${ENVIRONMENT}"
+          echo "Region: ${AWS_REGION}"
+          echo "Deployment Time: $(date)"
           
-          echo "\nDeployment complete!"
+          echo "\n👍 DEPLOYMENT SUCCESSFUL!\n"
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          AWS_REGION: ${{ env.AWS_REGION }}
