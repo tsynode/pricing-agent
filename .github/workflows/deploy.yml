@@ -146,7 +146,13 @@ jobs:
           # Apply only specific resources that we know are safe to apply
           echo "Applying only specific resources that we know are safe to apply..."
           
-          # Apply DynamoDB table items (these are new and don't exist yet)
+          # Try to import DynamoDB table items first
+          echo "Attempting to import DynamoDB table items..."
+          for i in {0..2}; do
+            terraform import "aws_dynamodb_table_item.sample_inventory[$i]" "pricing-agent-${ENVIRONMENT}-inventory|product_id||PROD-$((1000 + i))" || true
+          done
+          
+          # Apply DynamoDB table items (will update if they exist, create if they don't)
           terraform apply -auto-approve -target=aws_dynamodb_table_item.sample_inventory || true
           terraform apply -auto-approve -target=aws_dynamodb_table_item.sample_pricing || true
           
