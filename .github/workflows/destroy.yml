@@ -52,43 +52,12 @@ jobs:
             -backend-config="region=${{ secrets.AWS_REGION }}" \
             -backend-config="encrypt=true"
       
-      - name: Import Resources Before Destroy
-        working-directory: ./infrastructure
-        run: |
-          echo "Importing existing resources before destroying..."
-          
-          # Import SSM parameters
-          terraform import aws_ssm_parameter.kb_id /pricing-agent-dev/knowledge-base-id || true
-          terraform import aws_ssm_parameter.session_bucket_name /pricing-agent-dev/session-bucket-name || true
-          terraform import aws_ssm_parameter.policy_bucket_name /pricing-agent-dev/policy-bucket-name || true
-          
-          # Import DynamoDB tables
-          terraform import aws_dynamodb_table.pricing pricing-agent-dev-pricing-rules || true
-          terraform import aws_dynamodb_table.inventory pricing-agent-dev-inventory || true
-          
-          # Import IAM policies
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          terraform import aws_iam_policy.ecs_task_policy arn:aws:iam::$ACCOUNT_ID:policy/pricing-agent-dev-ecs-task-policy || true
-          terraform import aws_iam_policy.ecs_execution_policy arn:aws:iam::$ACCOUNT_ID:policy/pricing-agent-dev-ecs-execution-policy || true
-          
-          # Import S3 buckets
-          terraform import aws_s3_bucket.policy pricing-agent-dev-policy || true
-          terraform import aws_s3_bucket.session pricing-agent-dev-session || true
-          
-          echo "Import completed. Ready to destroy resources."
-        env:
-          TF_VAR_environment: ${{ env.ENVIRONMENT }}
-          TF_VAR_project_name: pricing-agent
+
       
       - name: Terraform Destroy
         working-directory: ./infrastructure
         run: |
-          # First destroy VPC-related resources to free up limits
-          echo "Destroying VPC-related resources first..."
-          terraform destroy -auto-approve -target=aws_vpc.main -target=aws_eip.nat || true
-          
-          # Then destroy the rest
-          echo "Destroying remaining resources..."
+          echo "Destroying all resources..."
           terraform destroy -auto-approve
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
