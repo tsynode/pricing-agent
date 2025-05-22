@@ -194,14 +194,8 @@ resource "aws_iam_role_policy_attachment" "ecs_bedrock_access" {
   policy_arn = aws_iam_policy.bedrock_access.arn
 }
 
-# Data source to get the Bedrock foundation model details
-data "aws_bedrock_foundation_model" "agent_model" {
-  model_id = var.bedrock_model_id
-}
-
-data "aws_bedrock_foundation_model" "embedding_model" {
-  model_id = var.bedrock_embedding_model_id
-}
+# Bedrock foundation model ARNs are constructed directly using the model IDs
+# Format: arn:aws:bedrock:{region}::foundation-model/{model_id}
 
 # Create an OpenSearch Serverless Collection for the Knowledge Base
 resource "aws_opensearchserverless_collection" "pricing_kb" {
@@ -261,7 +255,7 @@ resource "awscc_bedrock_knowledge_base" "pricing_kb" {
   knowledge_base_configuration = {
     type = "VECTOR"
     vector_knowledge_base_configuration = {
-      embedding_model_arn = data.aws_bedrock_foundation_model.embedding_model.arn
+      embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_embedding_model_id}"
     }
   }
   
@@ -292,7 +286,7 @@ resource "awscc_bedrock_agent" "pricing_agent" {
   description = "AI agent for pricing compliance"
   
   agent_resource_role_arn = aws_iam_role.bedrock_service.arn
-  foundation_model       = data.aws_bedrock_foundation_model.agent_model.arn
+  foundation_model       = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
   instruction            = local.bedrock_agent_instruction
   
   # Create Action Groups for the Agent
