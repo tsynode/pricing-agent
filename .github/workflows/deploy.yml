@@ -146,13 +146,9 @@ jobs:
           # Apply only specific resources that we know are safe to apply
           echo "Applying only specific resources that we know are safe to apply..."
           
-          # Try to import DynamoDB table items first
-          echo "Attempting to import DynamoDB table items..."
-          for i in {0..2}; do
-            terraform import "aws_dynamodb_table_item.sample_inventory[$i]" "pricing-agent-${ENVIRONMENT}-inventory|product_id||PROD-$((1000 + i))" || true
-          done
-          
-          # Apply DynamoDB table items (will update if they exist, create if they don't)
+          # DynamoDB table items don't support import, so we'll just apply them directly
+          # If they already exist, Terraform will handle the conditional check failures gracefully
+          echo "Applying DynamoDB table items..."
           terraform apply -auto-approve -target=aws_dynamodb_table_item.sample_inventory || true
           terraform apply -auto-approve -target=aws_dynamodb_table_item.sample_pricing || true
           
@@ -178,7 +174,9 @@ jobs:
         id: set-ecr-repo
         run: |
           # Get ECR repository URI from Terraform output
-          ECR_REPO_URI=$(cd infrastructure && terraform output ecr_repository_url | tr -d '"')
+          cd infrastructure
+          ECR_REPO_URI=$(terraform output | grep ecr_repository_url | awk -F'= ' '{print $2}' | tr -d '"')
+          cd ..
           
           # Check if ECR_REPO_URI is empty
           if [ -z "$ECR_REPO_URI" ]; then
