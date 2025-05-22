@@ -38,9 +38,14 @@ resource "aws_iam_policy" "bedrock_access" {
   })
 }
 
-# Attach Bedrock access policy to Lambda execution role
-resource "aws_iam_role_policy_attachment" "lambda_bedrock_access" {
-  role       = aws_iam_role.lambda_exec.name
+# Attach Bedrock access policy to Lambda roles
+resource "aws_iam_role_policy_attachment" "inventory_scanner_bedrock_access" {
+  role       = aws_iam_role.inventory_scanner_lambda.name
+  policy_arn = aws_iam_policy.bedrock_access.arn
+}
+
+resource "aws_iam_role_policy_attachment" "pricing_tools_bedrock_access" {
+  role       = aws_iam_role.pricing_tools_lambda.name
   policy_arn = aws_iam_policy.bedrock_access.arn
 }
 
