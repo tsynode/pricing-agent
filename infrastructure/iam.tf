@@ -302,42 +302,16 @@ resource "aws_iam_role_policy_attachment" "pricing_tools_lambda" {
 # Bedrock IAM Roles
 ###########################
 
-resource "aws_iam_role" "bedrock_service" {
-  name = "${local.name_prefix}-bedrock-service-role"
+# The Bedrock service role and policies are now defined in bedrock_iam.tf
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "bedrock.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_policy" "bedrock_service" {
-  name        = "${local.name_prefix}-bedrock-service-policy"
-  description = "Policy for Bedrock service"
+# Additional S3 permissions for Bedrock service
+resource "aws_iam_policy" "bedrock_s3_access" {
+  name        = "${local.name_prefix}-bedrock-s3-access"
+  description = "S3 access policy for Bedrock service"
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "lambda:InvokeFunction"
-        ]
-        Resource = [
-          aws_lambda_function.inventory_scanner.arn,
-          aws_lambda_function.pricing_tools.arn
-        ]
-      },
       {
         Effect = "Allow"
         Action = [
@@ -348,19 +322,13 @@ resource "aws_iam_policy" "bedrock_service" {
           aws_s3_bucket.pricing_policies.arn,
           "${aws_s3_bucket.pricing_policies.arn}/*"
         ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "aoss:APIAccessAll"
-        ]
-        Resource = "*"
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "bedrock_service" {
+# Attach S3 access policy to Bedrock service role
+resource "aws_iam_role_policy_attachment" "bedrock_s3_access" {
   role       = aws_iam_role.bedrock_service.name
-  policy_arn = aws_iam_policy.bedrock_service.arn
+  policy_arn = aws_iam_policy.bedrock_s3_access.arn
 }
