@@ -429,15 +429,21 @@ jobs:
           # Get important outputs from Terraform
           cd infrastructure
           
-          # Get outputs directly without using command substitution in echo
-          ALB_DNS=$(terraform output alb_dns_name 2>/dev/null | tr -d '"' || echo "Not available")
-          ECR_REPO=$(terraform output ecr_repository_url 2>/dev/null | tr -d '"' || echo "Not available")
-          POLICY_BUCKET=$(terraform output policy_bucket_name 2>/dev/null | tr -d '"' || echo "Not available")
-          SESSION_BUCKET=$(terraform output session_bucket_name 2>/dev/null | tr -d '"' || echo "Not available")
-          INVENTORY_TABLE=$(terraform output inventory_table_name 2>/dev/null | tr -d '"' || echo "Not available")
-          PRICING_TABLE=$(terraform output pricing_table_name 2>/dev/null | tr -d '"' || echo "Not available")
-          ECS_CLUSTER=$(terraform output ecs_cluster_name 2>/dev/null | tr -d '"' || echo "Not available")
-          ECS_SERVICE=$(terraform output ecs_service_name 2>/dev/null | tr -d '"' || echo "pricing-agent-${ENVIRONMENT}-service")
+          # Get outputs directly and store them in variables
+          # Use eval to ensure proper command execution and variable assignment
+          eval "ALB_DNS=$(terraform output alb_dns_name 2>/dev/null | tr -d '"' || echo 'Not available')"
+          eval "ECR_REPO=$(terraform output ecr_repository_url 2>/dev/null | tr -d '"' || echo 'Not available')"
+          eval "POLICY_BUCKET=$(terraform output policy_bucket_name 2>/dev/null | tr -d '"' || echo 'Not available')"
+          eval "SESSION_BUCKET=$(terraform output session_bucket_name 2>/dev/null | tr -d '"' || echo 'Not available')"
+          eval "INVENTORY_TABLE=$(terraform output inventory_table_name 2>/dev/null | tr -d '"' || echo 'Not available')"
+          eval "PRICING_TABLE=$(terraform output pricing_table_name 2>/dev/null | tr -d '"' || echo 'Not available')"
+          eval "ECS_CLUSTER=$(terraform output ecs_cluster_name 2>/dev/null | tr -d '"' || echo 'Not available')"
+          eval "ECS_SERVICE=$(terraform output ecs_service_name 2>/dev/null | tr -d '"' || echo 'pricing-agent-${ENVIRONMENT}-service')"
+          
+          # Print the variables to verify they're set correctly
+          echo "ALB DNS: $ALB_DNS"
+          echo "ECR Repository: $ECR_REPO"
+          echo "ECS Cluster: $ECS_CLUSTER"
           
           # Print deployment summary
           echo "\n💻 APPLICATION ACCESS\n"
@@ -461,33 +467,43 @@ jobs:
           echo "Pricing Rules Table: $PRICING_TABLE"
           
           echo "\n💡 NEXT STEPS\n"
-          echo "1. Access your Streamlit application at: http://$ALB_DNS"
+          if [[ "$ALB_DNS" != "Not available" ]]; then
+            echo "1. Access your Streamlit application at: http://$ALB_DNS"
+          else
+            echo "1. Access your Streamlit application (check AWS Console for ALB DNS name)"
+          fi
           echo "2. Configure the Bedrock knowledge base separately"
           echo "3. Update the SSM parameter with the actual knowledge base ID"
           echo "4. Use the knowledge base sync script to populate the knowledge base"
           
           # Create a simple summary file for easy reference
-          cat << EOF > deployment-summary.txt
-          PRICING AGENT DEPLOYMENT SUMMARY
-          ==============================
+          echo "PRICING AGENT DEPLOYMENT SUMMARY" > deployment-summary.txt
+          echo "==============================" >> deployment-summary.txt
+          echo "" >> deployment-summary.txt
           
-          APPLICATION URL: http://$ALB_DNS
+          if [[ "$ALB_DNS" != "Not available" ]]; then
+            echo "APPLICATION URL: http://$ALB_DNS" >> deployment-summary.txt
+          else
+            echo "APPLICATION URL: Check AWS Console for ALB DNS name" >> deployment-summary.txt
+          fi
           
-          RESOURCES:
-          - Docker Image: $ECR_REPO:latest
-          - ECS Cluster: $ECS_CLUSTER
-          - ECS Service: $ECS_SERVICE
+          echo "" >> deployment-summary.txt
+          echo "RESOURCES:" >> deployment-summary.txt
+          echo "- Docker Image: $ECR_REPO:latest" >> deployment-summary.txt
+          echo "- ECS Cluster: $ECS_CLUSTER" >> deployment-summary.txt
+          echo "- ECS Service: $ECS_SERVICE" >> deployment-summary.txt
           
-          DATA STORAGE:
-          - Policy Bucket: $POLICY_BUCKET
-          - Session Bucket: $SESSION_BUCKET
-          - Inventory Table: $INVENTORY_TABLE
-          - Pricing Rules Table: $PRICING_TABLE
+          echo "" >> deployment-summary.txt
+          echo "DATA STORAGE:" >> deployment-summary.txt
+          echo "- Policy Bucket: $POLICY_BUCKET" >> deployment-summary.txt
+          echo "- Session Bucket: $SESSION_BUCKET" >> deployment-summary.txt
+          echo "- Inventory Table: $INVENTORY_TABLE" >> deployment-summary.txt
+          echo "- Pricing Rules Table: $PRICING_TABLE" >> deployment-summary.txt
           
-          Deployed on: $(date)
-          Environment: ${ENVIRONMENT}
-          Region: ${AWS_REGION}
-          EOF
+          echo "" >> deployment-summary.txt
+          echo "Deployed on: $(date)" >> deployment-summary.txt
+          echo "Environment: ${ENVIRONMENT}" >> deployment-summary.txt
+          echo "Region: ${AWS_REGION}" >> deployment-summary.txt
           
           echo "\n📌 DEPLOYMENT DETAILS\n"
           echo "Environment: ${ENVIRONMENT}"
