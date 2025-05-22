@@ -1,0 +1,44 @@
+# Electronics Pricing Policies
+
+## Overview
+These policies apply specifically to all electronic products and supersede general pricing policies where conflicts exist.
+
+## Pricing Guidelines
+
+1. Electronics must maintain a minimum profit margin of 20%.
+2. Premium electronics should be priced at least 10% higher than standard models.
+3. Extended warranties must be offered for all electronics over $100.
+4. Price matching is allowed for identical products from major competitors.
+5. Refurbished electronics must be priced at least 15% below new items.
+
+## Product Lifecycle Pricing
+
+1. New release products (0-3 months):
+   - Premium pricing strategy with minimal discounts
+   - No price matching during initial release period
+
+2. Standard lifecycle (3-12 months):
+   - Gradual price reductions allowed up to 15%
+   - Regular promotional cycles permitted
+
+3. Late lifecycle (12+ months):
+   - More aggressive discounting allowed up to 30%
+   - Bundle promotions encouraged
+
+## Accessory Pricing
+
+1. Accessories should be priced to maintain a 25-35% profit margin.
+2. Bundle pricing should offer 10-15% savings compared to individual purchases.
+3. Essential accessories (chargers, cables) should maintain competitive pricing.
+
+## Warranty and Service Pricing
+
+1. Extended warranties should be priced at 15-20% of the product price.
+2. Premium service plans should include value-added features to justify higher prices.
+3. Service plan renewals should offer a 10% loyalty discount.
+
+## Seasonal Promotions
+
+1. Major sales events (Black Friday, Cyber Monday) may allow discounts up to 35%.
+2. Back-to-school promotions should focus on bundles rather than deep discounts.
+3. Holiday season promotions must be planned and approved 60 days in advance.

@@ -1,355 +1,128 @@
-###############################################################################
-# AMAZON BEDROCK CONFIGURATION
-###############################################################################
-#
-# This file contains all resources related to Amazon Bedrock:
-# - Bedrock agent configuration
-# - Bedrock knowledge base setup
-# - IAM roles and policies for Bedrock access
-# - OpenSearch Serverless collection for the knowledge base
-#
-# Get current AWS account ID
-data "aws_caller_identity" "current" {}
-
-###############################################################################
-# BEDROCK IAM RESOURCES
-###############################################################################
-
-# IAM role for Bedrock service
-resource "aws_iam_role" "bedrock_service" {
-  name = "${local.name_prefix}-bedrock-service-role"
-  
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = [
-            "bedrock.amazonaws.com",
-            "aoss.amazonaws.com"
-          ]
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-  
-  tags = local.common_tags
-}
-
-# IAM policy for Bedrock access
-resource "aws_iam_policy" "bedrock_access" {
-  name        = "${local.name_prefix}-bedrock-access"
-  description = "Policy to allow access to Amazon Bedrock models and knowledge bases"
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "bedrock:InvokeModel",
-          "bedrock:InvokeModelWithResponseStream",
-          "bedrock:ListFoundationModels",
-          "bedrock:GetFoundationModel"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "bedrock:ListTagsForResource",
-          "bedrock:CreateModelCustomizationJob",
-          "bedrock:GetModelCustomizationJob",
-          "bedrock:StopModelCustomizationJob",
-          "bedrock:ListModelCustomizationJobs",
-          "bedrock:ListAgents",
-          "bedrock:GetAgent",
-          "bedrock:ListAgentAliases",
-          "bedrock:GetAgentAlias",
-          "bedrock:ListAgentActionGroups",
-          "bedrock:GetAgentActionGroup",
-          "bedrock:InvokeAgent",
-          "bedrock:Retrieve",
-          "bedrock:ListKnowledgeBases",
-          "bedrock:GetKnowledgeBase"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# IAM policy for Bedrock knowledge base access
-resource "aws_iam_policy" "bedrock_kb_policy" {
-  name        = "${local.name_prefix}-bedrock-kb-policy"
-  description = "Policy for Bedrock knowledge base access"
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "aoss:APIAccessAll",
-          "aoss:BatchGetCollection",
-          "aoss:BatchGetVectorEnrichmentPolicy",
-          "aoss:CreateCollection",
-          "aoss:CreateSecurityPolicy",
-          "aoss:CreateVectorEnrichmentPolicy",
-          "aoss:DeleteCollection",
-          "aoss:GetPoliciesStats",
-          "aoss:GetSecurityPolicy",
-          "aoss:ListCollections",
-          "aoss:ListSecurityPolicies",
-          "aoss:ListVectorEnrichmentPolicies",
-          "aoss:UpdateCollection",
-          "aoss:UpdateSecurityPolicy",
-          "aoss:UpdateVectorEnrichmentPolicy"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogDelivery",
-          "logs:GetLogDelivery",
-          "logs:UpdateLogDelivery",
-          "logs:DeleteLogDelivery",
-          "logs:ListLogDeliveries",
-          "logs:PutResourcePolicy",
-          "logs:DescribeResourcePolicies",
-          "logs:DescribeLogGroups",
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "lambda:InvokeFunction"
-        ]
-        Resource = [
-          aws_lambda_function.inventory_scanner.arn,
-          aws_lambda_function.pricing_tools.arn
-        ]
-      }
-    ]
-  })
-}
-
-# Additional S3 permissions for Bedrock service
-resource "aws_iam_policy" "bedrock_s3_access" {
-  name        = "${local.name_prefix}-bedrock-s3-access"
-  description = "S3 access policy for Bedrock service"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.pricing_policies.arn,
-          "${aws_s3_bucket.pricing_policies.arn}/*"
-        ]
-      }
-    ]
-  })
-}
-
-# Attach policies to Bedrock service role
-resource "aws_iam_role_policy_attachment" "bedrock_service_access" {
-  role       = aws_iam_role.bedrock_service.name
-  policy_arn = aws_iam_policy.bedrock_access.arn
-}
-
-resource "aws_iam_role_policy_attachment" "bedrock_service_kb" {
-  role       = aws_iam_role.bedrock_service.name
-  policy_arn = aws_iam_policy.bedrock_kb_policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "bedrock_s3_access" {
-  role       = aws_iam_role.bedrock_service.name
-  policy_arn = aws_iam_policy.bedrock_s3_access.arn
-}
-
-# Attach Bedrock access policy to Lambda roles
-resource "aws_iam_role_policy_attachment" "inventory_scanner_bedrock_access" {
-  role       = aws_iam_role.inventory_scanner_lambda.name
-  policy_arn = aws_iam_policy.bedrock_access.arn
-}
-
-resource "aws_iam_role_policy_attachment" "pricing_tools_bedrock_access" {
-  role       = aws_iam_role.pricing_tools_lambda.name
-  policy_arn = aws_iam_policy.bedrock_access.arn
-}
-
-# Attach Bedrock access policy to ECS task execution role
-resource "aws_iam_role_policy_attachment" "ecs_bedrock_access" {
-  role       = aws_iam_role.ecs_task_execution.name
-  policy_arn = aws_iam_policy.bedrock_access.arn
-}
-
-# Bedrock foundation model to use
-locals {
-  bedrock_model_id = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
-}
-
-# Create an OpenSearch Serverless Collection for the Knowledge Base
-resource "aws_opensearchserverless_collection" "pricing_kb" {
+resource "aws_opensearchserverless_collection" "kb_collection" {
   name = "${local.name_prefix}-kb-collection"
   type = "VECTORSEARCH"
   
   tags = local.common_tags
 }
 
-# Create an OpenSearch Serverless access policy
-resource "aws_opensearchserverless_access_policy" "pricing_kb_policy" {
-  name        = "${local.name_prefix}-kb-access-policy"
-  type        = "data"
-  description = "Access policy for pricing knowledge base collection"
-  policy = jsonencode([
-    {
-      Rules = [
-        {
-          ResourceType = "collection"
-          Resource     = [aws_opensearchserverless_collection.pricing_kb.arn]
-          Permission   = [
-            "aoss:CreateCollectionItems",
-            "aoss:DeleteCollectionItems",
-            "aoss:UpdateCollectionItems",
-            "aoss:DescribeCollectionItems"
-          ]
-        },
-        {
-          ResourceType = "index"
-          Resource     = ["${aws_opensearchserverless_collection.pricing_kb.arn}/*"]
-          Permission   = [
-            "aoss:ReadDocument",
-            "aoss:WriteDocument",
-            "aoss:UpdateDocument",
-            "aoss:DeleteDocument"
-          ]
-        }
-      ]
-      Principal = [aws_iam_role.bedrock_service.arn]
-    }
-  ])
+resource "aws_opensearchserverless_security_policy" "kb_encryption" {
+  name        = "${local.name_prefix}-kb-encryption"
+  type        = "encryption"
+  description = "Encryption policy for knowledge base collection"
+  
+  policy = jsonencode({
+    Rules = [
+      {
+        ResourceType = "collection"
+        Resource = [
+          "collection/${aws_opensearchserverless_collection.kb_collection.name}"
+        ]
+      }
+    ],
+    AWSOwnedKey = true
+  })
 }
 
-# Create CloudWatch Log Group for Knowledge Base
-resource "aws_cloudwatch_log_group" "knowledge_base_logs" {
-  name              = "/aws/bedrock/knowledge-bases/${local.bedrock_knowledge_base_name}"
-  retention_in_days = 14
+resource "aws_opensearchserverless_access_policy" "kb_access" {
+  name        = "${local.name_prefix}-kb-access"
+  type        = "data"
+  description = "Access policy for knowledge base collection"
+  
+  policy = jsonencode({
+    Rules = [
+      {
+        ResourceType = "collection",
+        Resource = [
+          "collection/${aws_opensearchserverless_collection.kb_collection.name}"
+        ],
+        Permission = [
+          "aoss:CreateCollectionItems",
+          "aoss:DeleteCollectionItems",
+          "aoss:UpdateCollectionItems",
+          "aoss:DescribeCollectionItems"
+        ]
+      },
+      {
+        ResourceType = "index",
+        Resource = [
+          "index/${aws_opensearchserverless_collection.kb_collection.name}/*"
+        ],
+        Permission = [
+          "aoss:CreateIndex",
+          "aoss:DeleteIndex",
+          "aoss:UpdateIndex",
+          "aoss:DescribeIndex",
+          "aoss:ReadDocument",
+          "aoss:WriteDocument"
+        ]
+      }
+    ],
+    Principal = [
+      aws_iam_role.ecs_task.arn,
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/bedrock.amazonaws.com/AWSServiceRoleForAmazonBedrockKnowledgeBase"
+    ]
+  })
+}
+
+resource "aws_bedrock_knowledge_base" "pricing_kb" {
+  name        = "${local.name_prefix}-kb"
+  description = "Knowledge base for pricing policies"
+  
+  knowledge_base_configuration {
+    type = "VECTOR"
+    vector_knowledge_base_configuration {
+      embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/amazon.titan-embed-text-v1"
+    }
+  }
+  
+  storage_configuration {
+    type = "OPENSEARCH_SERVERLESS"
+    opensearch_serverless_configuration {
+      collection_arn = aws_opensearchserverless_collection.kb_collection.arn
+    }
+  }
+  
+  depends_on = [
+    aws_opensearchserverless_security_policy.kb_encryption,
+    aws_opensearchserverless_access_policy.kb_access
+  ]
   
   tags = local.common_tags
 }
 
-# Create a Bedrock Knowledge Base
-resource "awscc_bedrock_knowledge_base" "pricing_kb" {
-  name        = local.bedrock_knowledge_base_name
-  description = "Knowledge base for pricing policies and compliance rules"
+resource "aws_bedrock_knowledge_base_data_source" "policy_data_source" {
+  knowledge_base_id = aws_bedrock_knowledge_base.pricing_kb.id
+  name              = "pricing-policies"
+  description       = "Pricing policies data source"
   
-  knowledge_base_configuration = {
-    type = "VECTOR"
-    vector_knowledge_base_configuration = {
-      embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_embedding_model_id}"
+  data_source_configuration {
+    type = "S3"
+    s3_configuration {
+      bucket_arn = aws_s3_bucket.policy.arn
     }
   }
   
-  storage_configuration = {
-    type = "OPENSEARCH_SERVERLESS"
-    opensearch_serverless_configuration = {
-      collection_arn = aws_opensearchserverless_collection.pricing_kb.arn
-      vector_index_name = "pricing-vector-index"
-      field_mapping = {
-        metadata_field = "metadata"
-        text_field = "text"
-        vector_field = "vector_embedding"
+  vector_ingestion_configuration {
+    chunking_configuration {
+      chunking_strategy = "FIXED_SIZE"
+      fixed_size_chunking_configuration {
+        max_tokens          = 300
+        overlap_percentage  = 10
       }
     }
   }
   
-  role_arn = aws_iam_role.bedrock_service.arn
-
-  depends_on = [
-    aws_opensearchserverless_access_policy.pricing_kb_policy,
-    aws_cloudwatch_log_group.knowledge_base_logs
-  ]
+  tags = local.common_tags
 }
 
-# Create a Bedrock Agent
-resource "awscc_bedrock_agent" "pricing_agent" {
-  agent_name  = local.bedrock_agent_name
-  description = "AI agent for pricing compliance"
+# Store knowledge base ID in SSM Parameter Store
+resource "aws_ssm_parameter" "kb_id" {
+  name  = "/${local.name_prefix}/knowledge-base-id"
+  type  = "String"
+  value = aws_bedrock_knowledge_base.pricing_kb.id
   
-  agent_resource_role_arn = aws_iam_role.bedrock_service.arn
-  foundation_model       = local.bedrock_model_id
-  instruction            = local.bedrock_agent_instruction
-  
-  # Create Action Groups for the Agent
-  action_groups = [
-    {
-      action_group_name = "InventoryTools"
-      description     = "Tools for scanning inventory"
-      action_group_executor = {
-        lambda = aws_lambda_function.inventory_scanner.arn
-      }
-      api_schema = jsondecode(local.inventory_tools_schema)
-    },
-    {
-      action_group_name = "PricingTools"
-      description     = "Tools for managing product prices"
-      action_group_executor = {
-        lambda = aws_lambda_function.pricing_tools.arn
-      }
-      api_schema = jsondecode(local.pricing_tools_schema)
-    }
-  ]
-  
-  # Note: Knowledge base associations are created with a separate resource below
+  tags = local.common_tags
 }
 
-# Create a Bedrock Agent Alias
-resource "awscc_bedrock_agent_alias" "pricing_agent_alias" {
-  agent_alias_name = local.bedrock_agent_alias_name
-  agent_id         = awscc_bedrock_agent.pricing_agent.id
-  description      = "Alias for pricing agent"
-  
-  routing_configuration = [
-    {
-      agent_version = "DRAFT"
-    }
-  ]
-}
-
-# Note: Knowledge base association would need to be created using AWS CLI or console
-# as there is no Terraform resource for this yet
-# aws bedrock associate-agent-knowledge-base \
-#   --agent-id <agent-id> \
-#   --knowledge-base-id <kb-id> \
-#   --description "Knowledge base for pricing policies and compliance"
-
-# Add Lambda permission for Bedrock Agent
-resource "aws_lambda_permission" "allow_bedrock_agent_inventory" {
-  statement_id  = "AllowBedrockAgentInventoryInvocation"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.inventory_scanner.function_name
-  principal     = "bedrock.amazonaws.com"
-  source_arn    = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/${awscc_bedrock_agent.pricing_agent.id}"
-}
-
-resource "aws_lambda_permission" "allow_bedrock_agent_pricing" {
-  statement_id  = "AllowBedrockAgentPricingInvocation"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.pricing_tools.function_name
-  principal     = "bedrock.amazonaws.com"
-  source_arn    = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/${awscc_bedrock_agent.pricing_agent.id}"
-}
+# Data source for current AWS account
+data "aws_caller_identity" "current" {}

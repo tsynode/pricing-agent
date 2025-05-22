@@ -1,0 +1,62 @@
+# Clothing Pricing Policies
+
+## Overview
+These policies apply specifically to all clothing and apparel products and supersede general pricing policies where conflicts exist.
+
+## Pricing Guidelines
+
+1. Designer clothing must maintain a minimum profit margin of 25%.
+2. Seasonal clothing can be discounted up to 40% at end of season.
+3. Basic apparel should be priced competitively with market leaders.
+4. Children's clothing should be priced 15-20% lower than adult equivalents.
+5. Promotional bundles should offer at least 10% savings over individual items.
+
+## Seasonal Pricing Strategy
+
+1. New season arrivals (first 4 weeks):
+   - Full price with no discounts
+   - Premium positioning in marketing materials
+
+2. Mid-season (weeks 5-12):
+   - Limited promotions allowed up to 20% off
+   - Bundle offers with accessories encouraged
+
+3. End of season (final 4 weeks):
+   - Clearance discounts of 30-40% permitted
+   - Additional markdowns for slow-moving inventory
+
+## Brand Tier Pricing
+
+1. Premium/Designer Brands:
+   - Minimum 25% profit margin
+   - Limited discounting (max 25% even during sales)
+   - Exclusive product positioning
+
+2. Mid-tier Brands:
+   - 20-25% profit margin
+   - Standard promotional calendar
+   - Competitive pricing against similar brands
+
+3. Value Brands:
+   - 15-20% profit margin
+   - Volume-based strategy
+   - Regular promotions to drive traffic
+
+## Special Categories
+
+1. Footwear:
+   - Seasonal styles follow clothing discount schedule
+   - Classic styles maintain more stable pricing
+   - Performance footwear follows electronics pricing model
+
+2. Accessories:
+   - Higher margins (30-35%) than main apparel
+   - Bundle pricing with outfits encouraged
+   - Limited deep discounting
+
+## Inventory Management Pricing
+
+1. Excess inventory (120+ days in stock):
+   - Progressive markdowns (20%, 30%, 40%)
+   - Consider outlet channel if no movement after 40% discount
+   - Seasonal storage for potential future seasons

@@ -1,0 +1,57 @@
+name: Sync Knowledge Base
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'policies/**'  # Only trigger on policy changes
+  workflow_dispatch:   # Allow manual triggering
+
+jobs:
+  sync-kb:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install boto3
+      
+      - name: Sync policies to S3
+        run: |
+          # Get policy bucket name from SSM
+          POLICY_BUCKET=$(aws ssm get-parameter --name "/pricing-agent-${{ secrets.ENVIRONMENT }}/policy-bucket-name" --query "Parameter.Value" --output text)
+          
+          # Sync policies to S3
+          aws s3 sync policies/ s3://$POLICY_BUCKET/ --delete
+          
+          echo "Policies synced to S3 bucket: $POLICY_BUCKET"
+      
+      - name: Run knowledge base sync
+        run: |
+          # Install script dependencies
+          pip install boto3
+          
+          # Make script executable
+          chmod +x scripts/sync_kb.py
+          
+          # Run sync script
+          python scripts/sync_kb.py --wait
+        env:
+          NAME_PREFIX: pricing-agent-${{ secrets.ENVIRONMENT }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}

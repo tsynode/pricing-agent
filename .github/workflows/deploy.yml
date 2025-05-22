@@ -1,228 +1,76 @@
-name: Deploy AI Pricing Compliance System
+name: Deploy Pricing Agent
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
-    inputs:
-      aws_region:
-        description: 'AWS Region to deploy to'
-        required: true
-        default: 'us-east-1'
-        type: choice
-        options:
-          - us-east-1
-          - us-east-2
-          - us-west-1
-          - us-west-2
-          - eu-west-1
-          - eu-central-1
-
-env:
-  AWS_REGION: ${{ github.event.inputs.aws_region || 'us-east-1' }}
-  TERRAFORM_VERSION: 1.5.7
+    branches: [main]
+    paths-ignore:
+      - 'policies/**'  # Policies have their own workflow
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
+      
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Terraform
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: "Step 1: Create S3 Bucket for Terraform State"
-        run: |
-          # Create a unique bucket name with GitHub repository owner
-          BUCKET_NAME="pricing-agent-tf-state-$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
-          
-          # Create S3 bucket for Terraform state if it doesn't exist
-          aws s3api head-bucket --bucket $BUCKET_NAME 2>/dev/null || \
-          aws s3api create-bucket \
-            --bucket $BUCKET_NAME \
-            --region ${{ env.AWS_REGION }} \
-            $([[ "${{ env.AWS_REGION }}" == "us-east-1" ]] || echo "--create-bucket-configuration LocationConstraint=${{ env.AWS_REGION }}")
-          
-          # Enable versioning on the bucket
-          aws s3api put-bucket-versioning \
-            --bucket $BUCKET_NAME \
-            --versioning-configuration Status=Enabled
-          
-          # Block public access to the bucket
-          aws s3api put-public-access-block \
-            --bucket $BUCKET_NAME \
-            --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
-          
-          # Enable encryption on the bucket
-          aws s3api put-bucket-encryption \
-            --bucket $BUCKET_NAME \
-            --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
-          
-          # Save the bucket name for Terraform Init step
-          echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
-          
-          # Print the bucket name for debugging
-          echo "Using S3 bucket: $BUCKET_NAME"
+          terraform_version: 1.5.0
       
-      - name: "Step 2: Initialize Terraform with S3 Backend"
+      - name: Terraform Init
         working-directory: ./infrastructure
-        run: |
-          # Print environment variables for debugging
-          echo "Using S3 bucket: $TF_BUCKET_NAME"
-          echo "Using AWS region: $AWS_REGION"
-          
-          # Initialize with S3 backend
-          terraform init \
-            -backend-config="bucket=$TF_BUCKET_NAME" \
-            -backend-config="key=pricing-agent/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION"
-
-      - name: "Step 3: Validate Terraform Configuration"
+        run: terraform init
+      
+      - name: Terraform Validate
         working-directory: ./infrastructure
         run: terraform validate
-
-      - name: "Step 4: Run terraform plan"
-        run: |
-          cd infrastructure
-          
-          # Set TF_LOG for more detailed output during plan
-          export TF_LOG=DEBUG
-          
-          # Run plan with detailed error capturing
-          terraform plan -input=false -detailed-exitcode -out=tfplan > plan_output.txt 2>&1 || {
-            echo "Plan failed with exit code $?"
-            echo "\n\n==== PLAN ERROR DETAILS ===="
-            cat plan_output.txt
-            
-            # Try to extract specific error messages
-            echo "\n\n==== EXTRACTED ERRORS ===="
-            grep -A 10 "Error:" plan_output.txt || echo "No specific error messages found"
-            
-            # Exit with error to stop the workflow
-            exit 1
-          }
-          
-          # Verify the plan file exists and is valid
-          if [ ! -f tfplan ]; then
-            echo "Error: Plan file was not created"
-            exit 1
-          fi
-          
-          # Output a summary of the plan
-          echo "\n\n==== PLAN SUMMARY ===="
-          terraform show -no-color tfplan | grep -E '^[[:space:]]*(\+|-|~)' | head -n 50 || echo "No plan summary available"
-
-      - name: "Step 5: Apply Terraform Changes"
+      
+      - name: Terraform Plan
         working-directory: ./infrastructure
+        run: terraform plan -out=tfplan
+        env:
+          TF_VAR_environment: ${{ secrets.ENVIRONMENT }}
+          TF_VAR_project_name: pricing-agent
+      
+      - name: Terraform Apply
+        working-directory: ./infrastructure
+        run: terraform apply -auto-approve tfplan
+        env:
+          TF_VAR_environment: ${{ secrets.ENVIRONMENT }}
+          TF_VAR_project_name: pricing-agent
+      
+      - name: Build and push Docker image
         run: |
-          # Verify the plan file exists and is valid before attempting to apply
-          if [ ! -f tfplan ]; then
-            echo "Error: Plan file does not exist or is invalid. Cannot proceed with apply."
-            exit 1
-          fi
+          # Get ECR repository URI from Terraform output
+          ECR_REPO_URI=$(cd infrastructure && terraform output -raw ecr_repository_url)
           
-          # Set TF_LOG for more detailed output
-          export TF_LOG=DEBUG
+          # Login to ECR
+          aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_REPO_URI
           
-          # Apply with error handling
-          terraform apply -auto-approve tfplan > apply_output.txt 2>&1 || {
-            echo "\n\n==== APPLY ERROR DETAILS ===="
-            cat apply_output.txt
-            
-            echo "\n\n==== EXTRACTED ERRORS ===="
-            grep -A 10 "Error:" apply_output.txt || echo "No specific error messages found"
-            
-            echo "\n\nTerraform apply failed. Checking for state information..."
-            terraform state list 2>/dev/null || echo "No state available"
-            
-            exit 1
-          }
-
-      - name: Get ECR Repository URL
-        id: ecr
+          # Build and push Docker image
+          docker build -t $ECR_REPO_URI:latest .
+          docker push $ECR_REPO_URI:latest
+      
+      - name: Update ECS service
         run: |
-          ECR_REPO_URL=$(terraform -chdir=./infrastructure output -raw ecr_repository_url)
-          echo "repo_url=${ECR_REPO_URL}" >> $GITHUB_OUTPUT
-
-      - name: Package Lambda Functions
-        run: |
-          # Create deployment packages for Lambda functions
-          mkdir -p ./build/lambdas
+          # Get cluster and service names from Terraform output
+          CLUSTER_NAME=$(cd infrastructure && terraform output -raw ecs_cluster_name)
+          SERVICE_NAME=$(cd infrastructure && terraform output -raw ecs_service_name)
           
-          # Inventory Scanner Lambda
-          cd ./src/lambdas/inventory_scanner
-          pip install -r requirements.txt -t ./package
-          cp lambda_function.py ./package/
-          cd ./package
-          zip -r ../../../../../../../build/lambdas/inventory_scanner.zip .
-          cd ../../../
-          
-          # Batch Processor Lambda
-          cd ./batch_processor
-          pip install -r requirements.txt -t ./package
-          cp lambda_function.py ./package/
-          cd ./package
-          zip -r ../../../../../../../build/lambdas/batch_processor.zip .
-          cd ../../../
-          
-          # Pricing Tools Lambda
-          cd ./pricing_tools
-          pip install -r requirements.txt -t ./package
-          cp lambda_function.py ./package/
-          cd ./package
-          zip -r ../../../../../../../build/lambdas/pricing_tools.zip .
-          cd ../../../
-
-      - name: Update Lambda Functions
+          # Force new deployment
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+      
+      - name: Output application URL
         run: |
-          # Update Lambda functions with new code
-          aws lambda update-function-code \
-            --function-name $(terraform -chdir=./infrastructure output -raw inventory_scanner_lambda_name) \
-            --zip-file fileb://build/lambdas/inventory_scanner.zip
-            
-          aws lambda update-function-code \
-            --function-name $(terraform -chdir=./infrastructure output -raw batch_processor_lambda_name) \
-            --zip-file fileb://build/lambdas/batch_processor.zip
-            
-          aws lambda update-function-code \
-            --function-name $(terraform -chdir=./infrastructure output -raw pricing_tools_lambda_name) \
-            --zip-file fileb://build/lambdas/pricing_tools.zip
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Build and push Streamlit Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: ./src/streamlit
-          push: true
-          tags: ${{ steps.ecr.outputs.repo_url }}:latest
-
-      - name: Force new ECS deployment
-        run: |
-          aws ecs update-service \
-            --cluster $(terraform -chdir=./infrastructure output -raw ecs_cluster_name) \
-            --service $(terraform -chdir=./infrastructure output -raw ecs_service_name) \
-            --force-new-deployment
-
-      - name: Output Deployment Information
-        run: |
-          echo "Deployment completed successfully!"
-          echo "Application URL: http://$(terraform -chdir=./infrastructure output -raw alb_dns_name)"
+          echo "Application deployed successfully!"
+          echo "URL: $(cd infrastructure && terraform output -raw alb_dns_name)"
