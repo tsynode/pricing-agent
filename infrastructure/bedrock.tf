@@ -1,31 +1,21 @@
-# Use the AWS-IA Bedrock module for Knowledge Base
-module "bedrock" {
-  source  = "aws-ia/bedrock/aws"
-  version = "0.0.24"  # Updated to latest version
-  
-  # Required foundation model for IAM policies
-  foundation_model = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
-  
-  # Knowledge base configuration - minimal required settings
-  create_default_kb = true
-  create_agent = false
-  create_s3_data_source = true
-  
-  # Knowledge base name
-  kb_name = "${local.name_prefix}-kb"
-  
-  # S3 data source configuration
-  kb_s3_data_source = aws_s3_bucket.policy.arn
-  
-  # Tags
-  tags = local.common_tags
-}
+# Temporarily use a placeholder for the knowledge base ID
+# We'll create the knowledge base separately after the initial infrastructure deployment
 
-# Store knowledge base ID in SSM Parameter Store
+# Store placeholder knowledge base ID in SSM Parameter Store
 resource "aws_ssm_parameter" "kb_id" {
   name  = "/${local.name_prefix}/knowledge-base-id"
   type  = "String"
-  value = module.bedrock.default_kb_identifier
+  value = "placeholder-kb-id"  # This will be updated later with the actual KB ID
+  
+  tags = local.common_tags
+}
+
+# Store policy bucket name in SSM Parameter Store for reference
+# This will be used by the knowledge base sync script
+resource "aws_ssm_parameter" "policy_bucket_name" {
+  name  = "/${local.name_prefix}/policy-bucket-name"
+  type  = "String"
+  value = aws_s3_bucket.policy.id
   
   tags = local.common_tags
 }
