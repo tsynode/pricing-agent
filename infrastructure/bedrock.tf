@@ -10,15 +10,5 @@ resource "aws_ssm_parameter" "kb_id" {
   tags = local.common_tags
 }
 
-# Store policy bucket name in SSM Parameter Store for reference
-# This will be used by the knowledge base sync script
-resource "aws_ssm_parameter" "policy_bucket_name" {
-  name  = "/${local.name_prefix}/policy-bucket-name"
-  type  = "String"
-  value = aws_s3_bucket.policy.id
-  
-  tags = local.common_tags
-}
-
 # Data source for current AWS account
 data "aws_caller_identity" "current" {}
