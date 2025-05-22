@@ -7,8 +7,8 @@ resource "aws_s3_bucket" "session" {
     ignore_changes = [
       bucket,
       server_side_encryption_configuration,
-      versioning,
-      acl
+      versioning
+      # Removed deprecated 'acl' attribute
     ]
   }
   
@@ -59,8 +59,8 @@ resource "aws_s3_bucket" "policy" {
     ignore_changes = [
       bucket,
       server_side_encryption_configuration,
-      versioning,
-      acl
+      versioning
+      # Removed deprecated 'acl' attribute
     ]
   }
   

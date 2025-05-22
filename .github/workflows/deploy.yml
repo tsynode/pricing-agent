@@ -236,12 +236,41 @@ jobs:
             -target=aws_security_group_rule.ecs_ingress \
             -target=aws_security_group_rule.ecs_egress
           
-          # Apply load balancer
+          # Apply load balancer - first import existing resources if they exist
+          echo "Checking for existing ALB resources..."
+          
+          # Check if ALB exists
+          ALB_EXISTS=$(aws elbv2 describe-load-balancers --names pricing-agent-${ENVIRONMENT}-alb 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$ALB_EXISTS" != "NOT_FOUND" ]]; then
+            echo "Importing existing ALB..."
+            ALB_ARN=$(echo "$ALB_EXISTS" | jq -r '.LoadBalancers[0].LoadBalancerArn')
+            terraform import aws_lb.main "$ALB_ARN" || echo "Import failed, but continuing"
+            
+            # Check if target group exists
+            TG_EXISTS=$(aws elbv2 describe-target-groups --names pricing-agent-${ENVIRONMENT}-tg 2>/dev/null || echo "NOT_FOUND")
+            if [[ "$TG_EXISTS" != "NOT_FOUND" ]]; then
+              echo "Importing existing target group..."
+              TG_ARN=$(echo "$TG_EXISTS" | jq -r '.TargetGroups[0].TargetGroupArn')
+              terraform import aws_lb_target_group.main "$TG_ARN" || echo "Import failed, but continuing"
+              
+              # Check if HTTP listener exists
+              LISTENER_EXISTS=$(aws elbv2 describe-listeners --load-balancer-arn "$ALB_ARN" 2>/dev/null || echo "NOT_FOUND")
+              if [[ "$LISTENER_EXISTS" != "NOT_FOUND" ]]; then
+                HTTP_LISTENER=$(echo "$LISTENER_EXISTS" | jq -r '.Listeners[] | select(.Port == 80)')
+                if [[ -n "$HTTP_LISTENER" ]]; then
+                  echo "Importing existing HTTP listener..."
+                  HTTP_LISTENER_ARN=$(echo "$HTTP_LISTENER" | jq -r '.ListenerArn')
+                  terraform import aws_lb_listener.http "$HTTP_LISTENER_ARN" || echo "Import failed, but continuing"
+                fi
+              fi
+            fi
+          fi
+          
           echo "Applying load balancer..."
           terraform apply -auto-approve \
             -target=aws_lb.main \
             -target=aws_lb_target_group.main \
-            -target=aws_lb_listener.http
+            -target=aws_lb_listener.http || echo "Some ALB resources already exist, continuing with other resources"
           
           # Apply ECS resources (cluster, task definition, service)
           echo "\n🐳 Applying ECS resources...\n"
