@@ -1,117 +1,35 @@
-resource "aws_opensearchserverless_collection" "kb_collection" {
-  name = "${local.name_prefix}-kb-collection"
-  type = "VECTORSEARCH"
+# Use the AWS-IA Bedrock module for Knowledge Base
+module "bedrock" {
+  source  = "aws-ia/bedrock/aws"
+  version = "0.0.20"
   
-  tags = local.common_tags
-}
-
-resource "aws_opensearchserverless_security_policy" "kb_encryption" {
-  name        = "${local.name_prefix}-kb-encryption"
-  type        = "encryption"
-  description = "Encryption policy for knowledge base collection"
+  # Create a vector knowledge base with OpenSearch Serverless
+  create_default_kb = true
+  create_s3_data_source = true
   
-  policy = jsonencode({
-    Rules = [
-      {
-        ResourceType = "collection"
-        Resource = [
-          "collection/${aws_opensearchserverless_collection.kb_collection.name}"
-        ]
-      }
-    ],
-    AWSOwnedKey = true
-  })
-}
-
-resource "aws_opensearchserverless_access_policy" "kb_access" {
-  name        = "${local.name_prefix}-kb-access"
-  type        = "data"
-  description = "Access policy for knowledge base collection"
+  # Knowledge base configuration
+  kb_name = "${local.name_prefix}-kb"
+  kb_description = "Knowledge base for pricing policies"
+  instruction = "You are a pricing compliance agent who can provide detailed information about pricing policies and regulations."
   
-  policy = jsonencode({
-    Rules = [
-      {
-        ResourceType = "collection",
-        Resource = [
-          "collection/${aws_opensearchserverless_collection.kb_collection.name}"
-        ],
-        Permission = [
-          "aoss:CreateCollectionItems",
-          "aoss:DeleteCollectionItems",
-          "aoss:UpdateCollectionItems",
-          "aoss:DescribeCollectionItems"
-        ]
-      },
-      {
-        ResourceType = "index",
-        Resource = [
-          "index/${aws_opensearchserverless_collection.kb_collection.name}/*"
-        ],
-        Permission = [
-          "aoss:CreateIndex",
-          "aoss:DeleteIndex",
-          "aoss:UpdateIndex",
-          "aoss:DescribeIndex",
-          "aoss:ReadDocument",
-          "aoss:WriteDocument"
-        ]
-      }
-    ],
-    Principal = [
-      aws_iam_role.ecs_task.arn,
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/bedrock.amazonaws.com/AWSServiceRoleForAmazonBedrockKnowledgeBase"
-    ]
-  })
-}
-
-resource "aws_bedrock_knowledge_base" "pricing_kb" {
-  name        = "${local.name_prefix}-kb"
-  description = "Knowledge base for pricing policies"
+  # S3 data source configuration
+  s3_data_source_name = "pricing-policies"
+  s3_data_source_description = "Pricing policies data source"
+  s3_bucket_name = aws_s3_bucket.policy.id
+  s3_bucket_arn = aws_s3_bucket.policy.arn
   
-  knowledge_base_configuration {
-    type = "VECTOR"
-    vector_knowledge_base_configuration {
-      embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/amazon.titan-embed-text-v1"
-    }
-  }
+  # Chunking configuration
+  chunking_strategy = "FIXED_SIZE"
+  max_tokens = 300
+  overlap_percentage = 10
   
-  storage_configuration {
-    type = "OPENSEARCH_SERVERLESS"
-    opensearch_serverless_configuration {
-      collection_arn = aws_opensearchserverless_collection.kb_collection.arn
-    }
-  }
+  # Embedding model
+  embedding_model = "amazon.titan-embed-text-v1"
   
-  depends_on = [
-    aws_opensearchserverless_security_policy.kb_encryption,
-    aws_opensearchserverless_access_policy.kb_access
-  ]
+  # IAM roles
+  iam_roles = [aws_iam_role.ecs_task.arn]
   
-  tags = local.common_tags
-}
-
-resource "aws_bedrock_knowledge_base_data_source" "policy_data_source" {
-  knowledge_base_id = aws_bedrock_knowledge_base.pricing_kb.id
-  name              = "pricing-policies"
-  description       = "Pricing policies data source"
-  
-  data_source_configuration {
-    type = "S3"
-    s3_configuration {
-      bucket_arn = aws_s3_bucket.policy.arn
-    }
-  }
-  
-  vector_ingestion_configuration {
-    chunking_configuration {
-      chunking_strategy = "FIXED_SIZE"
-      fixed_size_chunking_configuration {
-        max_tokens          = 300
-        overlap_percentage  = 10
-      }
-    }
-  }
-  
+  # Tags
   tags = local.common_tags
 }
 
@@ -119,7 +37,7 @@ resource "aws_bedrock_knowledge_base_data_source" "policy_data_source" {
 resource "aws_ssm_parameter" "kb_id" {
   name  = "/${local.name_prefix}/knowledge-base-id"
   type  = "String"
-  value = aws_bedrock_knowledge_base.pricing_kb.id
+  value = module.bedrock.knowledge_base_id
   
   tags = local.common_tags
 }
