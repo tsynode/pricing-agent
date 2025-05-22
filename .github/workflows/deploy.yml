@@ -182,31 +182,67 @@ jobs:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
       
-      - name: Update ECS Service
+      - name: Debug and Create ECS Service
         run: |
-          echo "\n🚀 Updating ECS service...\n"
+          echo "\n🚀 Debugging ECS service...\n"
           
           # Get the ECS cluster and service names
           CLUSTER_NAME="pricing-agent-${ENVIRONMENT}-cluster"
           SERVICE_NAME="pricing-agent-${ENVIRONMENT}-service"
           
-          # Check if the ECS service exists in AWS
-          aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query "services[?status=='ACTIVE']" --output text &> /dev/null
+          # Check if the cluster exists
+          echo "Checking if ECS cluster exists..."
+          aws ecs describe-clusters --clusters $CLUSTER_NAME --query "clusters[?status=='ACTIVE']" --output text
           
-          if [ $? -eq 0 ]; then
-            echo "ECS service exists. Forcing new deployment..."
-            aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment && {
-              echo "\n✅ ECS service updated successfully!\n"
-            } || {
-              echo "\n⚠️ Failed to update ECS service.\n"
-              echo "This may be due to the service being in the process of creation."
-              echo "The service will be created by Terraform if it doesn't exist yet."
-            }
-          else
-            echo "ECS service does not exist yet or is being created."
-            echo "This is expected if the service is still being provisioned."
-            echo "The service will be available shortly."
-          fi
+          # Check if the task definition exists
+          echo "\nChecking task definition..."
+          TASK_DEF="pricing-agent-${ENVIRONMENT}"
+          aws ecs describe-task-definition --task-definition $TASK_DEF || echo "Task definition not found"
+          
+          # Check if the service exists
+          echo "\nChecking if ECS service exists..."
+          aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME || echo "Service not found"
+          
+          # Check security groups and subnets
+          echo "\nChecking security groups..."
+          SG_NAME="pricing-agent-${ENVIRONMENT}-ecs-sg"
+          aws ec2 describe-security-groups --filters "Name=group-name,Values=$SG_NAME" || echo "Security group not found"
+          
+          echo "\nChecking subnets..."
+          aws ec2 describe-subnets --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-*" || echo "Subnets not found"
+          
+          # Try to create the service if it doesn't exist
+          echo "\nAttempting to create ECS service..."
+          cd infrastructure
+          
+          # Apply just the ECS service
+          echo "Applying ECS service resource..."
+          terraform apply -auto-approve -target=aws_ecs_service.main || {
+            echo "\n⚠️ Failed to create ECS service through Terraform.\n"
+            
+            # Get task definition ARN
+            TASK_DEF_ARN=$(aws ecs describe-task-definition --task-definition $TASK_DEF --query "taskDefinition.taskDefinitionArn" --output text)
+            
+            # Get security group ID
+            SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=$SG_NAME" --query "SecurityGroups[0].GroupId" --output text)
+            
+            # Get subnet IDs
+            SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-*" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
+            
+            # Get target group ARN
+            TG_NAME="pricing-agent-${ENVIRONMENT}-tg"
+            TG_ARN=$(aws elbv2 describe-target-groups --names $TG_NAME --query "TargetGroups[0].TargetGroupArn" --output text)
+            
+            echo "Creating ECS service using AWS CLI..."
+            aws ecs create-service \
+              --cluster $CLUSTER_NAME \
+              --service-name $SERVICE_NAME \
+              --task-definition $TASK_DEF_ARN \
+              --desired-count 1 \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_IDS],securityGroups=[$SG_ID],assignPublicIp=DISABLED}" \
+              --load-balancers "targetGroupArn=$TG_ARN,containerName=app,containerPort=8501" || echo "Failed to create service using AWS CLI"
+          }
         env:
           ENVIRONMENT: ${{ env.ENVIRONMENT }}
       
