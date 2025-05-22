@@ -1,10 +1,16 @@
-###########################
-# ECS Cluster and Resources
-###########################
-
-###########################
-# ECS IAM Resources
-###########################
+###############################################################################
+# ECS CLUSTER AND RESOURCES
+###############################################################################
+#
+# This file contains all resources related to Amazon ECS:
+# - ECS cluster configuration
+# - ECS service and task definitions
+# - IAM roles and policies for ECS tasks
+# - Container definitions for the Streamlit application
+#
+###############################################################################
+# ECS IAM RESOURCES
+###############################################################################
 
 # ECS Task Execution Role
 resource "aws_iam_role" "ecs_task_execution" {

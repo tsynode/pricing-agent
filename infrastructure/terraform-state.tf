@@ -1,3 +1,14 @@
+###############################################################################
+# TERRAFORM STATE MANAGEMENT RESOURCES
+###############################################################################
+#
+# This file contains resources for Terraform state management:
+# - S3 bucket for storing Terraform state files
+# - DynamoDB table for state locking to prevent concurrent modifications
+#
+# These resources need to be created before the S3 backend can be used.
+# See backend.tf for the bootstrap process.
+#
 # S3 bucket for Terraform state
 resource "aws_s3_bucket" "terraform_state" {
   bucket = "pricing-agent-terraform-state-${random_string.suffix.result}"

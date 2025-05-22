@@ -1,3 +1,18 @@
+###############################################################################
+# NETWORKING AND VPC RESOURCES
+###############################################################################
+#
+# This file contains all networking resources:
+# - VPC configuration
+# - Subnets (public and private)
+# - Internet Gateway and NAT Gateway
+# - Route tables and routes
+# - Security groups for all components
+#
+###############################################################################
+# VPC CONFIGURATION
+###############################################################################
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true

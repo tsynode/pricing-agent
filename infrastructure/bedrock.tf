@@ -1,10 +1,16 @@
-###########################
-# Amazon Bedrock Configuration
-###########################
-
-###########################
-# Bedrock IAM Resources
-###########################
+###############################################################################
+# AMAZON BEDROCK CONFIGURATION
+###############################################################################
+#
+# This file contains all resources related to Amazon Bedrock:
+# - Bedrock agent configuration
+# - Bedrock knowledge base setup
+# - IAM roles and policies for Bedrock access
+# - OpenSearch Serverless collection for the knowledge base
+#
+###############################################################################
+# BEDROCK IAM RESOURCES
+###############################################################################
 
 # IAM role for Bedrock service
 resource "aws_iam_role" "bedrock_service" {
@@ -190,11 +196,11 @@ resource "aws_iam_role_policy_attachment" "ecs_bedrock_access" {
 
 # Data source to get the Bedrock foundation model details
 data "aws_bedrock_foundation_model" "agent_model" {
-  model_identifier = var.bedrock_model_id
+  model_id = var.bedrock_model_id
 }
 
 data "aws_bedrock_foundation_model" "embedding_model" {
-  model_identifier = var.bedrock_embedding_model_id
+  model_id = var.bedrock_embedding_model_id
 }
 
 # Create an OpenSearch Serverless Collection for the Knowledge Base
@@ -210,7 +216,6 @@ resource "aws_opensearchserverless_access_policy" "pricing_kb_policy" {
   name        = "${local.name_prefix}-kb-access-policy"
   type        = "data"
   description = "Access policy for pricing knowledge base collection"
-  tags        = local.common_tags
   policy = jsonencode([
     {
       Rules = [

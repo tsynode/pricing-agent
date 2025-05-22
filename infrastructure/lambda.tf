@@ -1,10 +1,16 @@
-###########################
-# Lambda Functions
-###########################
-
-###########################
-# Lambda IAM Resources
-###########################
+###############################################################################
+# LAMBDA FUNCTIONS
+###############################################################################
+#
+# This file contains all resources related to AWS Lambda functions:
+# - Lambda function definitions
+# - IAM roles and policies for Lambda execution
+# - CloudWatch log groups for Lambda logging
+# - Lambda permissions and event source mappings
+#
+###############################################################################
+# LAMBDA IAM RESOURCES
+###############################################################################
 
 # Inventory Scanner Lambda Role
 resource "aws_iam_role" "inventory_scanner_lambda" {

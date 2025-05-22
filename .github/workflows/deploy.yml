@@ -47,7 +47,7 @@ jobs:
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
-      - name: Temporarily Disable Backend
+      - name: "Step 1: Temporarily Disable Backend for Bootstrap"
         working-directory: ./infrastructure
         run: |
           # Create a backup of the backend.tf file
@@ -62,11 +62,11 @@ jobs:
           }
           EOF
       
-      - name: Initialize Terraform with Local Backend
+      - name: "Step 2: Initialize Terraform with Local Backend"
         working-directory: ./infrastructure
         run: terraform init
       
-      - name: Create Terraform State Resources
+      - name: "Step 3: Create S3 Bucket and DynamoDB Table for State Management"
         working-directory: ./infrastructure
         run: |
           # Create a temporary directory for state resources only
@@ -113,13 +113,13 @@ jobs:
           # Clean up
           cd ../infrastructure
       
-      - name: Restore Backend Configuration
+      - name: "Step 4: Restore S3 Backend Configuration"
         working-directory: ./infrastructure
         run: |
           # Restore the original backend.tf file
           mv backend.tf.bak backend.tf
       
-      - name: Initialize with S3 Backend
+      - name: "Step 5: Initialize Terraform with S3 Backend"
         working-directory: ./infrastructure
         run: |
           terraform init -force-copy \
@@ -128,15 +128,15 @@ jobs:
             -backend-config="region=${AWS_REGION}" \
             -backend-config="dynamodb_table=${TF_DYNAMODB_TABLE}"
 
-      - name: Terraform Validate
+      - name: "Step 6: Validate Terraform Configuration"
         working-directory: ./infrastructure
         run: terraform validate
 
-      - name: Terraform Plan
+      - name: "Step 7: Generate Terraform Plan"
         working-directory: ./infrastructure
         run: terraform plan -out=tfplan
 
-      - name: Terraform Apply
+      - name: "Step 8: Apply Terraform Changes"
         working-directory: ./infrastructure
         run: terraform apply -auto-approve tfplan
 
