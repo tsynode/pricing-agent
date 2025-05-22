@@ -8,6 +8,9 @@
 # - IAM roles and policies for Bedrock access
 # - OpenSearch Serverless collection for the knowledge base
 #
+# Get current AWS account ID
+data "aws_caller_identity" "current" {}
+
 ###############################################################################
 # BEDROCK IAM RESOURCES
 ###############################################################################
@@ -194,8 +197,10 @@ resource "aws_iam_role_policy_attachment" "ecs_bedrock_access" {
   policy_arn = aws_iam_policy.bedrock_access.arn
 }
 
-# Bedrock foundation model ARNs are constructed directly using the model IDs
-# Format: arn:aws:bedrock:{region}::foundation-model/{model_id}
+# Bedrock foundation model to use
+locals {
+  bedrock_model_id = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+}
 
 # Create an OpenSearch Serverless Collection for the Knowledge Base
 resource "aws_opensearchserverless_collection" "pricing_kb" {
@@ -286,7 +291,7 @@ resource "awscc_bedrock_agent" "pricing_agent" {
   description = "AI agent for pricing compliance"
   
   agent_resource_role_arn = aws_iam_role.bedrock_service.arn
-  foundation_model       = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
+  foundation_model       = local.bedrock_model_id
   instruction            = local.bedrock_agent_instruction
   
   # Create Action Groups for the Agent
@@ -314,13 +319,15 @@ resource "awscc_bedrock_agent" "pricing_agent" {
 
 # Create a Bedrock Agent Alias
 resource "awscc_bedrock_agent_alias" "pricing_agent_alias" {
-  agent_id    = awscc_bedrock_agent.pricing_agent.id
-  alias_name  = local.bedrock_agent_alias_name
-  description = "Production alias for pricing agent"
+  agent_alias_name = local.bedrock_agent_alias_name
+  agent_id         = awscc_bedrock_agent.pricing_agent.id
+  description      = "Alias for pricing agent"
   
-  routing_configuration = {
-    agent_version = "DRAFT"
-  }
+  routing_configuration = [
+    {
+      agent_version = "DRAFT"
+    }
+  ]
 }
 
 # Note: Knowledge base association would need to be created using AWS CLI or console
@@ -336,7 +343,7 @@ resource "aws_lambda_permission" "allow_bedrock_agent_inventory" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.inventory_scanner.function_name
   principal     = "bedrock.amazonaws.com"
-  source_arn    = awscc_bedrock_agent.pricing_agent.arn
+  source_arn    = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/${awscc_bedrock_agent.pricing_agent.id}"
 }
 
 resource "aws_lambda_permission" "allow_bedrock_agent_pricing" {
@@ -344,5 +351,5 @@ resource "aws_lambda_permission" "allow_bedrock_agent_pricing" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.pricing_tools.function_name
   principal     = "bedrock.amazonaws.com"
-  source_arn    = awscc_bedrock_agent.pricing_agent.arn
+  source_arn    = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/${awscc_bedrock_agent.pricing_agent.id}"
 }
