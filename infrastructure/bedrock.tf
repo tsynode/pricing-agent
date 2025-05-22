@@ -1,84 +1,23 @@
 ###########################
-# Amazon Bedrock Resources
+# Amazon Bedrock Configuration
 ###########################
 
-# Bedrock Knowledge Base
-resource "aws_bedrockagent_knowledge_base" "pricing_policies" {
-  name        = "${local.name_prefix}-pricing-policies-kb"
-  description = "Knowledge base for pricing policies"
-  
-  storage_configuration {
-    type = "OPENSEARCH_SERVERLESS"
-    
-    opensearch_serverless_configuration {
-      collection_name = "${local.name_prefix}-pricing-policies-collection"
-      vector_field_name = "embedding"
-      text_field_name = "text"
-      field_mapping {
-        field_name = "document_id"
-        field_type = "STRING"
-      }
-      field_mapping {
-        field_name = "policy_type"
-        field_type = "STRING"
-      }
-      field_mapping {
-        field_name = "category"
-        field_type = "STRING"
-      }
-    }
-  }
-  
-  knowledge_base_configuration {
-    type = "VECTOR"
-    
-    vector_knowledge_base_configuration {
-      embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_embedding_model_id}"
-    }
-  }
-  
-  role_arn = aws_iam_role.bedrock_service.arn
-  
-  tags = local.common_tags
-}
+# Instead of creating Bedrock resources directly with Terraform,
+# we'll define local variables to store the resource information
+# and use them in other resources like Lambda and ECS
 
-# Bedrock Knowledge Base Data Source
-resource "aws_bedrockagent_data_source" "pricing_policies" {
-  knowledge_base_id = aws_bedrockagent_knowledge_base.pricing_policies.id
-  name              = "${local.name_prefix}-pricing-policies-data-source"
-  description       = "S3 data source for pricing policies"
+locals {
+  # Bedrock model ARNs
+  bedrock_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
+  bedrock_embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_embedding_model_id}"
   
-  data_source_configuration {
-    type = "S3"
-    
-    s3_configuration {
-      bucket_name = aws_s3_bucket.pricing_policies.bucket
-      inclusion_prefixes = ["pricing-policies/"]
-    }
-  }
+  # Bedrock resource names (to be created manually or via script)
+  bedrock_knowledge_base_name = "${local.name_prefix}-pricing-policies-kb"
+  bedrock_agent_name = "${local.name_prefix}-pricing-agent"
+  bedrock_agent_alias_name = "${local.name_prefix}-pricing-agent-alias"
   
-  vector_ingestion_configuration {
-    chunking_configuration {
-      chunking_strategy = "FIXED_SIZE"
-      
-      fixed_size_chunking_configuration {
-        max_tokens = 300
-        overlap    = 20
-      }
-    }
-  }
-  
-  role_arn = aws_iam_role.bedrock_service.arn
-}
-
-# Bedrock Agent
-resource "aws_bedrockagent_agent" "pricing_agent" {
-  name        = "${local.name_prefix}-pricing-agent"
-  description = "AI agent for pricing compliance"
-  
-  foundation_model = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
-  
-  instruction = <<-EOT
+  # Bedrock agent instruction
+  bedrock_agent_instruction = <<-EOT
     You are a pricing compliance specialist responsible for ensuring all product prices align with company policies.
 
     Your capabilities:
@@ -97,32 +36,8 @@ resource "aws_bedrockagent_agent" "pricing_agent" {
     Response format: Provide summary of actions taken and reasoning for each price change.
   EOT
   
-  idle_session_ttl_in_seconds = 1800
-  
-  role_arn = aws_iam_role.bedrock_service.arn
-  
-  knowledge_base_associations {
-    knowledge_base_id = aws_bedrockagent_knowledge_base.pricing_policies.id
-  }
-  
-  tags = local.common_tags
-}
-
-# Inventory Action Group
-resource "aws_bedrockagent_agent_action_group" "inventory_tools" {
-  agent_id    = aws_bedrockagent_agent.pricing_agent.id
-  name        = "InventoryTools"
-  description = "Tools for scanning inventory"
-  
-  action_group_executor {
-    lambda {
-      lambda_arn = aws_lambda_function.inventory_scanner.arn
-    }
-  }
-  
-  action_group_state = "ENABLED"
-  
-  api_schema = jsonencode({
+  # API schemas for action groups (to be used in manual creation or scripts)
+  inventory_tools_schema = jsonencode({
     openapi = "3.0.0"
     info = {
       title   = "Inventory Tools API"
@@ -176,23 +91,8 @@ resource "aws_bedrockagent_agent_action_group" "inventory_tools" {
       }
     }
   })
-}
-
-# Pricing Tools Action Group
-resource "aws_bedrockagent_agent_action_group" "pricing_tools" {
-  agent_id    = aws_bedrockagent_agent.pricing_agent.id
-  name        = "PricingTools"
-  description = "Tools for managing product prices"
   
-  action_group_executor {
-    lambda {
-      lambda_arn = aws_lambda_function.pricing_tools.arn
-    }
-  }
-  
-  action_group_state = "ENABLED"
-  
-  api_schema = jsonencode({
+  pricing_tools_schema = jsonencode({
     openapi = "3.0.0"
     info = {
       title   = "Pricing Tools API"
@@ -325,17 +225,4 @@ resource "aws_bedrockagent_agent_action_group" "pricing_tools" {
       }
     }
   })
-}
-
-# Bedrock Agent Alias
-resource "aws_bedrockagent_agent_alias" "pricing_agent" {
-  agent_id    = aws_bedrockagent_agent.pricing_agent.id
-  name        = "${local.name_prefix}-pricing-agent-alias"
-  description = "Alias for pricing compliance agent"
-  
-  routing_configuration {
-    agent_version = "$LATEST"
-  }
-  
-  tags = local.common_tags
 }

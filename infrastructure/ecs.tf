@@ -64,12 +64,24 @@ resource "aws_ecs_task_definition" "streamlit" {
           value = var.aws_region
         },
         {
+          name  = "BEDROCK_MODEL_ID"
+          value = var.bedrock_model_id
+        },
+        {
+          name  = "BEDROCK_EMBEDDING_MODEL_ID"
+          value = var.bedrock_embedding_model_id
+        },
+        {
           name  = "BEDROCK_AGENT_ID"
-          value = aws_bedrock_agent.pricing_agent.id
+          value = module.bedrock.bedrock_agent.id
         },
         {
           name  = "BEDROCK_AGENT_ALIAS_ID"
-          value = aws_bedrock_agent_alias.pricing_agent.id
+          value = module.bedrock.bedrock_agent_alias.id
+        },
+        {
+          name  = "BEDROCK_KNOWLEDGE_BASE_ID"
+          value = module.bedrock.knowledge_base.id
         }
       ]
       

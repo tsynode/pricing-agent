@@ -35,15 +35,35 @@ output "s3_bucket_name" {
 
 output "bedrock_agent_id" {
   description = "ID of the Bedrock agent"
-  value       = aws_bedrock_agent.pricing_agent.id
+  value       = module.bedrock.bedrock_agent.id
 }
 
 output "bedrock_agent_alias_id" {
   description = "ID of the Bedrock agent alias"
-  value       = aws_bedrock_agent_alias.pricing_agent.id
+  value       = module.bedrock.bedrock_agent_alias.id
 }
 
 output "bedrock_knowledge_base_id" {
   description = "ID of the Bedrock knowledge base"
-  value       = aws_bedrock_knowledge_base.pricing_policies.id
+  value       = module.bedrock.knowledge_base.id
+}
+
+output "bedrock_model_id" {
+  description = "ID of the Bedrock model"
+  value       = var.bedrock_model_id
+}
+
+output "bedrock_embedding_model_id" {
+  description = "ID of the Bedrock embedding model"
+  value       = var.bedrock_embedding_model_id
+}
+
+output "lambda_inventory_scanner_arn" {
+  description = "ARN of the inventory scanner Lambda function"
+  value       = aws_lambda_function.inventory_scanner.arn
+}
+
+output "lambda_pricing_tools_arn" {
+  description = "ARN of the pricing tools Lambda function"
+  value       = aws_lambda_function.pricing_tools.arn
 }

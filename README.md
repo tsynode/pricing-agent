@@ -48,6 +48,18 @@ The system is built on AWS services with a serverless architecture:
 2. Configure AWS credentials in GitHub repository secrets:
    - `AWS_ACCESS_KEY_ID`
    - `AWS_SECRET_ACCESS_KEY`
+   - `AWS_SESSION_TOKEN` (if using temporary credentials)
+
+#### Bedrock Resources
+
+AWS Bedrock resources (Agent, Knowledge Base, etc.) are automatically deployed as part of the infrastructure using the AWS Bedrock Terraform module. The deployment includes:
+
+- A Bedrock Knowledge Base for pricing policies with S3 data source integration
+- A Bedrock Agent using Claude 3.7 Sonnet model
+- Action groups for inventory and pricing tools connected to Lambda functions
+- Agent alias for deployment
+
+No manual setup is required for Bedrock resources - everything is handled through the GitHub Actions workflow.
    - `AWS_SESSION_TOKEN` (optional, for temporary credentials)
 3. Either:
    - Push to the main branch to trigger automatic deployment, or
