@@ -21,6 +21,7 @@ output "ecs_service_name" {
 output "knowledge_base_id" {
   description = "ID of the Bedrock knowledge base (placeholder)"
   value       = aws_ssm_parameter.kb_id.value
+  sensitive   = true
 }
 
 output "session_bucket_name" {
