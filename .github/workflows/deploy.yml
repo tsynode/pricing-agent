@@ -82,6 +82,32 @@ jobs:
         working-directory: ./infrastructure
         run: terraform validate
       
+      - name: Import Existing Resources
+        working-directory: ./infrastructure
+        run: |
+          echo "Importing existing resources from troubleshooting branch deployment..."
+          
+          # Import SSM parameters
+          terraform import aws_ssm_parameter.kb_id /pricing-agent-${ENVIRONMENT}/knowledge-base-id || true
+          terraform import aws_ssm_parameter.session_bucket_name /pricing-agent-${ENVIRONMENT}/session-bucket-name || true
+          terraform import aws_ssm_parameter.policy_bucket_name /pricing-agent-${ENVIRONMENT}/policy-bucket-name || true
+          
+          # Import DynamoDB tables
+          terraform import aws_dynamodb_table.pricing pricing-agent-${ENVIRONMENT}-pricing-rules || true
+          terraform import aws_dynamodb_table.inventory pricing-agent-${ENVIRONMENT}-inventory || true
+          
+          # Import CloudWatch log group
+          terraform import aws_cloudwatch_log_group.main /ecs/pricing-agent-${ENVIRONMENT} || true
+          
+          # Import ECR repository
+          terraform import aws_ecr_repository.main pricing-agent-${ENVIRONMENT} || true
+          
+          # Import IAM roles
+          terraform import aws_iam_role.ecs_execution pricing-agent-${ENVIRONMENT}-ecs-execution-role || true
+          terraform import aws_iam_role.ecs_task pricing-agent-${ENVIRONMENT}-ecs-task-role || true
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+      
       - name: Terraform Plan
         working-directory: ./infrastructure
         run: |
@@ -103,15 +129,19 @@ jobs:
         working-directory: ./infrastructure
         run: |
           # Enable Terraform debug logging
-          export TF_LOG=DEBUG
+          export TF_LOG=TRACE
           export TF_LOG_PATH=terraform-apply.log
           
           # Run apply with increased timeout
-          terraform apply -auto-approve tfplan || {
+          terraform apply -auto-approve || {
             echo "Terraform apply failed, checking logs:"
-            tail -n 100 terraform-apply.log
+            tail -n 500 terraform-apply.log
             exit 1
           }
+          
+          # Always display the log tail for debugging
+          echo "DEBUG LOG OUTPUT:"
+          tail -n 500 terraform-apply.log
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
