@@ -297,7 +297,7 @@ resource "awscc_bedrock_agent" "pricing_agent" {
       action_group_executor = {
         lambda = aws_lambda_function.inventory_scanner.arn
       }
-      api_schema = local.inventory_tools_schema
+      api_schema = jsondecode(local.inventory_tools_schema)
     },
     {
       action_group_name = "PricingTools"
@@ -305,7 +305,7 @@ resource "awscc_bedrock_agent" "pricing_agent" {
       action_group_executor = {
         lambda = aws_lambda_function.pricing_tools.arn
       }
-      api_schema = local.pricing_tools_schema
+      api_schema = jsondecode(local.pricing_tools_schema)
     }
   ]
   
@@ -323,12 +323,12 @@ resource "awscc_bedrock_agent_alias" "pricing_agent_alias" {
   }
 }
 
-# Associate the knowledge base with the agent
-resource "awscc_bedrock_agent_knowledge_base" "pricing_kb_association" {
-  agent_id        = awscc_bedrock_agent.pricing_agent.id
-  knowledge_base_id = awscc_bedrock_knowledge_base.pricing_kb.id
-  description     = "Knowledge base for pricing policies and compliance"
-}
+# Note: Knowledge base association would need to be created using AWS CLI or console
+# as there is no Terraform resource for this yet
+# aws bedrock associate-agent-knowledge-base \
+#   --agent-id <agent-id> \
+#   --knowledge-base-id <kb-id> \
+#   --description "Knowledge base for pricing policies and compliance"
 
 # Add Lambda permission for Bedrock Agent
 resource "aws_lambda_permission" "allow_bedrock_agent_inventory" {
