@@ -89,10 +89,10 @@ jobs:
           REPO_NAME="pricing-agent-${ENVIRONMENT}"
           echo "Checking if ECR repository $REPO_NAME already exists..."
           
-          # Try to describe the repository
-          aws ecr describe-repositories --repository-names $REPO_NAME &> /dev/null
+          # Try to describe the repository with better error handling
+          REPO_EXISTS=$(aws ecr describe-repositories --repository-names $REPO_NAME 2>/dev/null || echo "NOT_FOUND")
           
-          if [ $? -eq 0 ]; then
+          if [[ "$REPO_EXISTS" != "NOT_FOUND" ]]; then
             echo "ECR repository already exists. Importing into Terraform state..."
             terraform import aws_ecr_repository.main $REPO_NAME || {
               echo "Failed to import ECR repository. This is not critical, continuing..."
