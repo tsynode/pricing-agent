@@ -429,29 +429,24 @@ jobs:
           # Get important outputs from Terraform
           cd infrastructure
           
-          # Get ALB DNS name
+          # Get outputs directly without using command substitution in echo
           ALB_DNS=$(terraform output alb_dns_name 2>/dev/null | tr -d '"' || echo "Not available")
-          
-          # Get ECR repository URL
           ECR_REPO=$(terraform output ecr_repository_url 2>/dev/null | tr -d '"' || echo "Not available")
-          
-          # Get S3 bucket names
           POLICY_BUCKET=$(terraform output policy_bucket_name 2>/dev/null | tr -d '"' || echo "Not available")
           SESSION_BUCKET=$(terraform output session_bucket_name 2>/dev/null | tr -d '"' || echo "Not available")
-          
-          # Get DynamoDB table names
           INVENTORY_TABLE=$(terraform output inventory_table_name 2>/dev/null | tr -d '"' || echo "Not available")
           PRICING_TABLE=$(terraform output pricing_table_name 2>/dev/null | tr -d '"' || echo "Not available")
-          
-          # Get ECS cluster and service names
           ECS_CLUSTER=$(terraform output ecs_cluster_name 2>/dev/null | tr -d '"' || echo "Not available")
-          # For ECS service, we know the naming convention even if the output isn't available
           ECS_SERVICE=$(terraform output ecs_service_name 2>/dev/null | tr -d '"' || echo "pricing-agent-${ENVIRONMENT}-service")
           
           # Print deployment summary
           echo "\n💻 APPLICATION ACCESS\n"
-          echo "Access your Pricing Agent at: http://$ALB_DNS"
-          echo "(It may take a few minutes for the application to become available)"
+          if [[ "$ALB_DNS" != "Not available" ]]; then
+            echo "Access your Streamlit application at: http://$ALB_DNS"
+            echo "(It may take a few minutes for the application to become available)"
+          else
+            echo "Load balancer DNS not available yet. Check the AWS Console for the ALB DNS name."
+          fi
           
           echo "\n💾 RESOURCE INFORMATION\n"
           echo "Docker Image: $ECR_REPO:latest"
@@ -466,14 +461,39 @@ jobs:
           echo "Pricing Rules Table: $PRICING_TABLE"
           
           echo "\n💡 NEXT STEPS\n"
-          echo "1. Configure the Bedrock knowledge base separately"
-          echo "2. Update the SSM parameter with the actual knowledge base ID"
-          echo "3. Use the knowledge base sync script to populate the knowledge base"
+          echo "1. Access your Streamlit application at: http://$ALB_DNS"
+          echo "2. Configure the Bedrock knowledge base separately"
+          echo "3. Update the SSM parameter with the actual knowledge base ID"
+          echo "4. Use the knowledge base sync script to populate the knowledge base"
+          
+          # Create a simple summary file for easy reference
+          cat << EOF > deployment-summary.txt
+          PRICING AGENT DEPLOYMENT SUMMARY
+          ==============================
+          
+          APPLICATION URL: http://$ALB_DNS
+          
+          RESOURCES:
+          - Docker Image: $ECR_REPO:latest
+          - ECS Cluster: $ECS_CLUSTER
+          - ECS Service: $ECS_SERVICE
+          
+          DATA STORAGE:
+          - Policy Bucket: $POLICY_BUCKET
+          - Session Bucket: $SESSION_BUCKET
+          - Inventory Table: $INVENTORY_TABLE
+          - Pricing Rules Table: $PRICING_TABLE
+          
+          Deployed on: $(date)
+          Environment: ${ENVIRONMENT}
+          Region: ${AWS_REGION}
+          EOF
           
           echo "\n📌 DEPLOYMENT DETAILS\n"
           echo "Environment: ${ENVIRONMENT}"
           echo "Region: ${AWS_REGION}"
           echo "Deployment Time: $(date)"
+          echo "Summary file created: deployment-summary.txt"
           
           echo "\n👍 DEPLOYMENT SUCCESSFUL!\n"
         env:
