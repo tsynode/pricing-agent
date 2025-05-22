@@ -14,6 +14,16 @@ resource "aws_iam_role" "ecs_execution" {
     ]
   })
   
+  # Prevent conflicts with existing roles
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      assume_role_policy,
+      max_session_duration,
+      permissions_boundary
+    ]
+  }
+  
   tags = local.common_tags
 }
 
@@ -38,12 +48,30 @@ resource "aws_iam_role" "ecs_task" {
     ]
   })
   
+  # Prevent conflicts with existing roles
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      assume_role_policy,
+      max_session_duration,
+      permissions_boundary
+    ]
+  }
+  
   tags = local.common_tags
 }
 
 resource "aws_iam_policy" "ecs_task_policy" {
   name        = "${local.name_prefix}-ecs-task-policy"
   description = "Policy for ECS task role"
+  
+  # Prevent conflicts with existing policies
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      description
+    ]
+  }
   
   policy = jsonencode({
     Version = "2012-10-17"
