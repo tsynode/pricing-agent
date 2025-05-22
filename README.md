@@ -15,7 +15,7 @@ This application helps ensure products are priced correctly according to company
 
 ### Current Implementation (Stage 1)
 
-![Current Architecture](docs/images/architecture_pricing_agent-Minimal.drawio.png)
+![Current Architecture](docs/images/minimal_architecture.png)
 
 Our current implementation focuses on simplicity and core functionality:
 
@@ -28,7 +28,7 @@ This architecture provides a clean, maintainable implementation that delivers th
 
 ### Target Architecture (Future)
 
-![Target Architecture](docs/images/architecture_pricing_agent-Scalable.drawio.png)
+![Target Architecture](docs/images/scalable_architecture.png)
 
 The target architecture adds scalability for handling large inventories:
 
@@ -126,7 +126,7 @@ Pricing policies are stored in the `policies/` directory. To update policies:
 
 ## Interactive Diagrams
 
-For interactive diagrams, you can open the [architecture_pricing_agent.drawio](architecture_pricing_agent.drawio) file using [draw.io](https://app.diagrams.net/).
+For interactive diagrams, you can open the original .drawio files in the docs directory using [draw.io](https://app.diagrams.net/).
 
 ## License
 
