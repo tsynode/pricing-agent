@@ -7,8 +7,10 @@ from strands_tools import retrieve, current_time
 import boto3
 import os
 import json
-from app.tools.pricing import check_price_compliance, update_price, get_pricing_policy
-from app.tools.inventory import scan_inventory
+
+# Direct imports for Docker container environment
+from tools.pricing import check_price_compliance, update_price, get_pricing_policy
+from tools.inventory import scan_inventory
 
 def get_knowledge_base_id():
     """Retrieve the knowledge base ID from SSM Parameter Store"""

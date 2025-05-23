@@ -2,6 +2,7 @@
 Pricing tools for the Strands Agents SDK
 """
 from strands import tool
+from strands_tools import retrieve
 import boto3
 import os
 import json

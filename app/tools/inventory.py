@@ -4,7 +4,7 @@ Inventory tools for the Strands Agents SDK
 from strands import tool
 import boto3
 import os
-from app.tools.pricing import check_price_compliance
+from .pricing import check_price_compliance
 
 # Initialize clients
 dynamodb = boto3.resource('dynamodb')

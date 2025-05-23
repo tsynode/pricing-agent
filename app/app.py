@@ -4,7 +4,9 @@ Streamlit UI for the Pricing Agent
 import streamlit as st
 import uuid
 import os
-from app.agent import create_agent, save_agent_session
+
+# Direct import for Docker container environment
+from agent import create_agent, save_agent_session
 
 # Set page configuration
 st.set_page_config(
@@ -36,7 +38,7 @@ with st.sidebar:
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.messages = []
         st.session_state.agent = create_agent()
-        st.experimental_rerun()
+        st.rerun()
     
     st.markdown("---")
     
@@ -51,7 +53,7 @@ with st.sidebar:
             if product_id and price > 0:
                 prompt = f"Check if product {product_id} with price ${price:.2f} complies with pricing policies."
                 st.session_state.messages.append({"role": "user", "content": prompt})
-                st.experimental_rerun()
+                st.rerun()
     
     # Scan inventory
     with st.expander("Scan Inventory"):
@@ -65,7 +67,7 @@ with st.sidebar:
                 prompt += " and show only non-compliant items"
             prompt += "."
             st.session_state.messages.append({"role": "user", "content": prompt})
-            st.experimental_rerun()
+            st.rerun()
     
     # Get pricing policy
     with st.expander("Get Pricing Policy"):
@@ -76,7 +78,7 @@ with st.sidebar:
                 prompt += f" for {policy_category} products"
             prompt += "."
             st.session_state.messages.append({"role": "user", "content": prompt})
-            st.experimental_rerun()
+            st.rerun()
     
     st.markdown("---")
     st.caption("Powered by Strands Agents SDK")
@@ -88,6 +90,26 @@ st.title("Pricing Compliance Agent")
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
+
+# Check if there's an unprocessed message from sidebar actions
+if st.session_state.messages and st.session_state.messages[-1]["role"] == "user" and "processed" not in st.session_state.messages[-1]:
+    # Get the last user message
+    last_message = st.session_state.messages[-1]["content"]
+    
+    # Generate assistant response
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            # Get response from agent
+            response = st.session_state.agent(last_message)
+            
+            # Display response - access the message attribute
+            st.write(response.message)
+            
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": response.message})
+            
+            # Mark the user message as processed
+            st.session_state.messages[-2]["processed"] = True
 
 # Chat input
 if prompt := st.chat_input("Ask about pricing policies or compliance..."):
@@ -102,13 +124,13 @@ if prompt := st.chat_input("Ask about pricing policies or compliance..."):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             # Get response from agent
-            response = st.session_state.agent.chat(prompt)
+            response = st.session_state.agent(prompt)
             
-            # Display response
-            st.write(response)
+            # Display response - access the message attribute
+            st.write(response.message)
             
-            # Save to session state
-            st.session_state.messages.append({"role": "assistant", "content": response})
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": response.message})
             
             # Save session to S3
             save_agent_session(st.session_state.agent, st.session_state.session_id)
