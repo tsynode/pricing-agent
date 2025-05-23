@@ -3,6 +3,16 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
   
+  # Prevent conflicts with existing VPC
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      cidr_block,
+      enable_dns_support,
+      enable_dns_hostnames
+    ]
+  }
+  
   tags = merge(
     local.common_tags,
     {
@@ -160,6 +170,16 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   
+  # Prevent conflicts with existing security groups
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      name,
+      description,
+      vpc_id
+    ]
+  }
+  
   tags = merge(
     local.common_tags,
     {
@@ -186,6 +206,16 @@ resource "aws_security_group" "ecs" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  # Prevent conflicts with existing security groups
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      name,
+      description,
+      vpc_id
+    ]
   }
   
   tags = merge(

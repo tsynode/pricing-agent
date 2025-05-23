@@ -1,3 +1,6 @@
+# Get the current AWS account ID
+data "aws_caller_identity" "current" {}
+
 resource "aws_iam_role" "ecs_execution" {
   name = "${local.name_prefix}-ecs-execution-role"
   
@@ -126,7 +129,8 @@ resource "aws_iam_policy" "ecs_task_policy" {
         ]
         Resource = [
           "arn:aws:bedrock:${var.aws_region}::foundation-model/*",
-          "arn:aws:bedrock:${var.aws_region}:*:knowledge-base/*"
+          "arn:aws:bedrock:${var.aws_region}:*:knowledge-base/*",
+          "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/*"
         ]
       }
     ]
