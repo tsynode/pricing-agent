@@ -130,10 +130,13 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Resource = [
           "arn:aws:bedrock:${var.aws_region}::foundation-model/*",
           "arn:aws:bedrock:us-east-2::foundation-model/*",
+          "arn:aws:bedrock:us-west-2::foundation-model/*",
           "arn:aws:bedrock:${var.aws_region}:*:knowledge-base/*",
           "arn:aws:bedrock:us-east-2:*:knowledge-base/*",
+          "arn:aws:bedrock:us-west-2:*:knowledge-base/*",
           "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/*",
-          "arn:aws:bedrock:us-east-2:${data.aws_caller_identity.current.account_id}:inference-profile/*"
+          "arn:aws:bedrock:us-east-2:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+          "arn:aws:bedrock:us-west-2:${data.aws_caller_identity.current.account_id}:inference-profile/*"
         ]
       }
     ]
