@@ -108,6 +108,59 @@ def create_agent(session_id=None):
     
     return agent
 
+def get_chat_list():
+    """Get a list of previous chat sessions from DynamoDB
+    
+    Returns:
+        list: List of chat sessions with session_id, last_updated, and first message
+    """
+    try:
+        # Get the DynamoDB table name from environment or use default
+        table_name = os.environ.get('SESSION_TABLE_NAME', 'pricing-agent-sessions')
+        
+        # Initialize DynamoDB client and table
+        dynamodb = boto3.resource('dynamodb')
+        session_table = dynamodb.Table(table_name)
+        
+        # Scan for all sessions, sorted by last_updated
+        response = session_table.scan()
+        sessions = response.get('Items', [])
+        
+        # Process sessions to extract relevant information
+        chat_list = []
+        for session in sessions:
+            session_id = session.get('session_id')
+            last_updated = session.get('last_updated')
+            messages_json = session.get('messages', '[]')
+            
+            try:
+                messages = json.loads(messages_json)
+                # Find the first user message to use as a title
+                chat_title = "New Chat"
+                for msg in messages:
+                    if msg.get('role') == 'user':
+                        # Truncate long messages for the title
+                        content = msg.get('content', '')
+                        chat_title = content[:30] + "..." if len(content) > 30 else content
+                        break
+                
+                chat_list.append({
+                    'session_id': session_id,
+                    'last_updated': last_updated,
+                    'title': chat_title
+                })
+            except json.JSONDecodeError:
+                # Skip sessions with invalid message format
+                continue
+        
+        # Sort by last_updated (newest first)
+        chat_list.sort(key=lambda x: x.get('last_updated', ''), reverse=True)
+        
+        return chat_list
+    except Exception as e:
+        print(f"Error retrieving chat list: {str(e)}")
+        return []
+
 def save_agent_session(agent, session_id):
     """Save the agent session state to DynamoDB
     

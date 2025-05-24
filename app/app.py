@@ -4,9 +4,10 @@ Streamlit UI for the Pricing Agent
 import streamlit as st
 import uuid
 import os
+from datetime import datetime
 
 # Direct import for Docker container environment
-from agent import create_agent, save_agent_session
+from agent import create_agent, save_agent_session, get_chat_list
 
 # Set page configuration
 st.set_page_config(
@@ -20,24 +21,62 @@ if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
     st.session_state.messages = []
     st.session_state.agent = None
+    st.session_state.chats = []
+    st.session_state.show_chat_list = True
 
 # Create or get the agent
 if st.session_state.agent is None:
     with st.spinner("Initializing pricing agent..."):
         st.session_state.agent = create_agent(st.session_state.session_id)
+        
+# Fetch the list of previous chats
+if st.session_state.show_chat_list:
+    st.session_state.chats = get_chat_list()
 
 # Sidebar for configuration and tools
 with st.sidebar:
     st.title("Pricing Agent")
     st.markdown("---")
     
-    # Session management
-    st.subheader("Session")
-    st.write(f"Session ID: {st.session_state.session_id}")
-    if st.button("New Session"):
+    # Chat management
+    st.subheader("Chats")
+    
+    # New chat button
+    if st.button("New Chat", key="new_chat"):
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.messages = []
         st.session_state.agent = create_agent()
+        st.session_state.show_chat_list = True  # Refresh the chat list
+        st.rerun()
+    
+    # Display previous chats
+    if st.session_state.chats:
+        st.write("Previous conversations:")
+        for chat in st.session_state.chats[:10]:  # Limit to 10 most recent chats
+            chat_id = chat.get('session_id')
+            chat_title = chat.get('title')
+            last_updated = chat.get('last_updated', '')
+            
+            # Format the date for display
+            try:
+                dt = datetime.fromisoformat(last_updated)
+                date_str = dt.strftime("%b %d, %Y")
+            except (ValueError, TypeError):
+                date_str = "Unknown date"
+            
+            # Create a button for each chat
+            if st.button(f"{chat_title}\n{date_str}", key=f"chat_{chat_id}"):
+                if chat_id != st.session_state.session_id:  # Only switch if it's a different chat
+                    st.session_state.session_id = chat_id
+                    st.session_state.messages = []
+                    st.session_state.agent = create_agent(chat_id)
+                    st.rerun()
+    else:
+        st.write("No previous chats found")
+        
+    # Refresh chat list button
+    if st.button("Refresh Chat List"):
+        st.session_state.show_chat_list = True
         st.rerun()
     
     st.markdown("---")
@@ -132,5 +171,8 @@ if prompt := st.chat_input("Ask about pricing policies or compliance..."):
             # Add assistant response to chat history
             st.session_state.messages.append({"role": "assistant", "content": response.message})
             
-            # Save session to S3
+            # Save session to DynamoDB
             save_agent_session(st.session_state.agent, st.session_state.session_id)
+            
+            # Mark that we should refresh the chat list on next load
+            st.session_state.show_chat_list = True
