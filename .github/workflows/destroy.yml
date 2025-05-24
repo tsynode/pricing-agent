@@ -62,3 +62,6 @@ jobs:
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
+          TF_VAR_model_id: "anthropic.claude-opus-4-20250514-v1:0"
+          TF_VAR_domain_name: ""
+          TF_VAR_enable_https: "true"

@@ -44,8 +44,8 @@ resource "aws_ecs_task_definition" "main" {
       
       environment = [
         {
-          name  = "SESSION_BUCKET_NAME"
-          value = aws_s3_bucket.session.id
+          name  = "SESSION_TABLE_NAME"
+          value = aws_dynamodb_table.sessions.name
         },
         {
           name  = "PRICING_TABLE_NAME"
@@ -62,6 +62,18 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "AWS_REGION"
           value = var.aws_region
+        },
+        {
+          name  = "POLICY_BUCKET_NAME"
+          value = aws_s3_bucket.policy.id
+        },
+        {
+          name  = "KB_PARAM_NAME"
+          value = "/${local.name_prefix}/knowledge-base-id"
+        },
+        {
+          name  = "MODEL_ID"
+          value = var.model_id
         }
       ]
       
