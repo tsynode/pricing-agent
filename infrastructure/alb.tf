@@ -81,12 +81,12 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
   
   default_action {
-    # If HTTPS is enabled and we have a domain, redirect to HTTPS
+    # If HTTPS is enabled, redirect to HTTPS
     # Otherwise, forward traffic directly to the target group
-    type = var.enable_https && var.domain_name != "" ? "redirect" : "forward"
+    type = var.enable_https ? "redirect" : "forward"
     
     dynamic "redirect" {
-      for_each = var.enable_https && var.domain_name != "" ? [1] : []
+      for_each = var.enable_https ? [1] : []
       content {
         port        = "443"
         protocol    = "HTTPS"
@@ -95,7 +95,7 @@ resource "aws_lb_listener" "http" {
     }
     
     dynamic "forward" {
-      for_each = !var.enable_https || var.domain_name == "" ? [1] : []
+      for_each = !var.enable_https ? [1] : []
       content {
         target_group_arn = aws_lb_target_group.main.arn
       }
@@ -117,10 +117,10 @@ resource "aws_lb_listener" "http" {
   tags = local.common_tags
 }
 
-# HTTPS listener for the ALB (only created if HTTPS is enabled and domain is provided)
+# HTTPS listener for the ALB (created if HTTPS is enabled, with either domain or self-signed cert)
 # Routes incoming HTTPS traffic to the target group
 resource "aws_lb_listener" "https" {
-  count = var.enable_https && var.domain_name != "" ? 1 : 0
+  count = var.enable_https ? 1 : 0
   
   load_balancer_arn = aws_lb.main.arn
   port              = 443

@@ -127,7 +127,8 @@ jobs:
           REPO_EXISTS=$(aws ecr describe-repositories --repository-names $REPO_NAME 2>/dev/null || echo "NOT_FOUND")
           
           if [[ "$REPO_EXISTS" != "NOT_FOUND" ]]; then
-            echo "ECR repository already exists. Importing into Terraform state..."
+            echo "ECR repository already exists. Importing it..."
+            # Try to import the repository
             terraform import aws_ecr_repository.main $REPO_NAME || {
               echo "Failed to import ECR repository. This is not critical, continuing..."
             }
@@ -139,6 +140,8 @@ jobs:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
           TF_VAR_model_id: ${{ env.MODEL }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_enable_https: ${{ env.ENABLE_HTTPS }}
       
       - name: Set ECR Repository URL
         id: set-ecr-repo
@@ -411,6 +414,8 @@ jobs:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
           TF_VAR_model_id: ${{ env.MODEL }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_enable_https: ${{ env.ENABLE_HTTPS }}
       
       - name: Debug and Create ECS Service
         run: |
