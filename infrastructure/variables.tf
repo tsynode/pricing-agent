@@ -59,7 +59,16 @@ variable "health_check_path" {
 }
 
 variable "model_id" {
-  description = "Bedrock model ID for Claude"
+  description = "Bedrock model ID for AI models. Available options:
+    - anthropic.claude-opus-4-20250514-v1:0 (Claude Opus 4, most powerful)
+    - anthropic.claude-sonnet-4-20250514-v1:0 (Claude Sonnet 4, balanced)
+    - anthropic.claude-3-7-sonnet-20250219-v1:0 (Claude 3.7 Sonnet, legacy)"
   type        = string
-  default     = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+  default     = "anthropic.claude-opus-4-20250514-v1:0"
+}
+
+variable "certificate_arn" {
+  description = "ARN of the SSL certificate for HTTPS support"
+  type        = string
+  default     = null
 }

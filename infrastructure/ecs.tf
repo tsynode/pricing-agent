@@ -91,15 +91,16 @@ resource "aws_ecs_service" "main" {
     create_before_destroy = true
     ignore_changes = [
       task_definition,  # Allow external updates to task definition
-      desired_count,    # Allow auto-scaling to modify the count
-      load_balancer     # Handle load balancer attachment changes gracefully
+      desired_count     # Allow auto-scaling to modify the count
     ]
   }
   
+  # Use private subnets for ECS tasks with NAT Gateway for internet access
+  # This follows AWS best practices for secure infrastructure
   network_configuration {
-    subnets          = aws_subnet.public[*].id
+    subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
   
   load_balancer {
@@ -111,7 +112,9 @@ resource "aws_ecs_service" "main" {
   depends_on = [
     aws_lb_listener.http,
     aws_iam_role_policy_attachment.ecs_execution,
-    aws_iam_role_policy_attachment.ecs_task
+    aws_iam_role_policy_attachment.ecs_task,
+    aws_nat_gateway.main,  # Explicit dependency on NAT Gateway
+    aws_route_table_association.private  # Ensure route tables are associated
   ]
   
   tags = local.common_tags

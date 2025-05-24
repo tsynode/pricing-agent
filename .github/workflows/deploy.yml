@@ -6,9 +6,43 @@ on:
     paths-ignore:
       - 'policies/**'  # Policies have their own workflow
   workflow_dispatch:  # Allow manual triggering
+    inputs:
+      environment:
+        description: 'Environment to deploy to (dev, staging, prod)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      model_id:
+        description: 'AI model to use'
+        required: true
+        default: 'anthropic.claude-opus-4-20250514-v1:0'
+        type: choice
+        options:
+          - anthropic.claude-opus-4-20250514-v1:0
+          - anthropic.claude-sonnet-4-20250514-v1:0
+          - anthropic.claude-3-7-sonnet-20250219-v1:0
+      domain_name:
+        description: 'Domain name for the application (e.g., pricing-agent.example.com)'
+        required: false
+        type: string
+      enable_https:
+        description: 'Enable HTTPS for the ALB'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 env:
-  ENVIRONMENT: dev  # Default environment, can be overridden in repository secrets
+  ENVIRONMENT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev' }}  # Use input or default to dev
+  MODEL: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.model_id || 'anthropic.claude-opus-4-20250514-v1:0' }}  # Use input or default to Claude 4 Opus
+  DOMAIN_NAME: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.domain_name || '' }}  # Domain name for HTTPS
+  ENABLE_HTTPS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enable_https || 'true' }}  # Enable HTTPS
 
 jobs:
   deploy:
@@ -104,6 +138,7 @@ jobs:
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
+          TF_VAR_model_id: ${{ env.MODEL }}
       
       - name: Set ECR Repository URL
         id: set-ecr-repo
@@ -318,15 +353,34 @@ jobs:
             # Get security group ID
             ECS_SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=pricing-agent-${ENVIRONMENT}-ecs-sg" --query "SecurityGroups[0].GroupId" --output text)
             
-            # Get subnet IDs
-            PRIVATE_SUBNET_1=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-1" --query "Subnets[0].SubnetId" --output text)
-            PRIVATE_SUBNET_2=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-2" --query "Subnets[0].SubnetId" --output text)
-            SUBNET_IDS="$PRIVATE_SUBNET_1,$PRIVATE_SUBNET_2"
+            # Get private subnet IDs - these should be used with NAT Gateways for proper internet access
+            echo "Looking for private subnets in the same VPC as the ALB..."
+            
+            # First, get the VPC ID from the ALB
+            ALB_VPC_ID=$(aws elbv2 describe-load-balancers --names pricing-agent-${ENVIRONMENT}-alb --query "LoadBalancers[0].VpcId" --output text 2>/dev/null)
+            echo "ALB VPC ID: $ALB_VPC_ID"
+            
+            # Then find private subnets in that VPC
+            PRIVATE_SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$ALB_VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-*" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
+            
+            # If no private subnets found, try to find any subnets with the right name pattern
+            if [[ -z "$PRIVATE_SUBNET_IDS" || "$PRIVATE_SUBNET_IDS" == "None" ]]; then
+              echo "No private subnets found in ALB VPC. Trying general search..."
+              PRIVATE_SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-*" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
+            fi
+            
+            # Final fallback to public subnets if needed
+            if [[ -z "$PRIVATE_SUBNET_IDS" || "$PRIVATE_SUBNET_IDS" == "None" ]]; then
+              echo "WARNING: No private subnets found. Falling back to public subnets. This is not recommended for production."
+              PRIVATE_SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$ALB_VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-public-*" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
+            fi
+            
+            echo "Using subnet IDs: $PRIVATE_SUBNET_IDS"
             
             # Get target group ARN
             TG_ARN=$(aws elbv2 describe-target-groups --names pricing-agent-${ENVIRONMENT}-tg --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null)
             
-            if [[ -n "$LATEST_TASK_DEF_ARN" && -n "$ECS_SG" && -n "$SUBNET_IDS" && -n "$TG_ARN" ]]; then
+            if [[ -n "$LATEST_TASK_DEF_ARN" && -n "$ECS_SG" && -n "$PRIVATE_SUBNET_IDS" && -n "$TG_ARN" ]]; then
               echo "Creating ECS service using AWS CLI..."
               aws ecs create-service \
                 --cluster pricing-agent-${ENVIRONMENT}-cluster \
@@ -334,7 +388,7 @@ jobs:
                 --task-definition $LATEST_TASK_DEF_ARN \
                 --desired-count 1 \
                 --launch-type FARGATE \
-                --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_IDS],securityGroups=[$ECS_SG],assignPublicIp=DISABLED}" \
+                --network-configuration "awsvpcConfiguration={subnets=[$PRIVATE_SUBNET_IDS],securityGroups=[$ECS_SG],assignPublicIp=DISABLED}" \
                 --load-balancers "targetGroupArn=$TG_ARN,containerName=app,containerPort=8501" || {
                   echo "Failed to create service using AWS CLI. Checking if service already exists..."
                   aws ecs update-service \
@@ -356,6 +410,7 @@ jobs:
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_project_name: pricing-agent
+          TF_VAR_model_id: ${{ env.MODEL }}
       
       - name: Debug and Create ECS Service
         run: |
@@ -401,8 +456,27 @@ jobs:
             # Get security group ID
             SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=$SG_NAME" --query "SecurityGroups[0].GroupId" --output text)
             
-            # Get subnet IDs
-            SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-*" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
+            # Get subnet IDs using the same strategy as above
+            # First, get the VPC ID from the ALB
+            ALB_VPC_ID=$(aws elbv2 describe-load-balancers --names pricing-agent-${ENVIRONMENT}-alb --query "LoadBalancers[0].VpcId" --output text 2>/dev/null)
+            echo "ALB VPC ID: $ALB_VPC_ID"
+            
+            # Then find private subnets in that VPC
+            SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$ALB_VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-*" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
+            
+            # If no private subnets found, try to find any subnets with the right name pattern
+            if [[ -z "$SUBNET_IDS" || "$SUBNET_IDS" == "None" ]]; then
+              echo "No private subnets found in ALB VPC. Trying general search..."
+              SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-*" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
+            fi
+            
+            # Final fallback to public subnets if needed
+            if [[ -z "$SUBNET_IDS" || "$SUBNET_IDS" == "None" ]]; then
+              echo "WARNING: No private subnets found. Falling back to public subnets. This is not recommended for production."
+              SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$ALB_VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-public-*" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
+            fi
+            
+            echo "Using subnet IDs: $SUBNET_IDS"
             
             # Get target group ARN
             TG_NAME="pricing-agent-${ENVIRONMENT}-tg"
