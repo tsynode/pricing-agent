@@ -16,6 +16,12 @@ st.set_page_config(
     layout="wide"
 )
 
+# Add the powered by message in the top left corner
+st.markdown(
+    "Powered by AWS <span style='color: #FF9900;'>Strands Agents SDK</span>", 
+    unsafe_allow_html=True
+)
+
 # Initialize session state
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
@@ -120,7 +126,6 @@ with st.sidebar:
             st.rerun()
     
     st.markdown("---")
-    st.caption("Powered by Strands Agents SDK")
 
 # Main chat interface
 st.title("Pricing Compliance Agent")
