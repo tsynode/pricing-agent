@@ -7,6 +7,7 @@ from strands_tools import retrieve, current_time
 import boto3
 import os
 import json
+from datetime import datetime
 
 # Direct imports for Docker container environment
 from tools.pricing import check_price_compliance, update_price, get_pricing_policy
@@ -15,11 +16,13 @@ from tools.inventory import scan_inventory
 def get_knowledge_base_id():
     """Retrieve the knowledge base ID from SSM Parameter Store"""
     ssm = boto3.client('ssm')
-    name_prefix = os.environ.get('NAME_PREFIX', 'pricing-agent-dev')
+    
+    # Get knowledge base parameter path from environment or use default
+    knowledge_base_param_path = os.environ.get('KB_PARAM_NAME', '/pricing-agent-dev/knowledge-base-id')
     
     try:
         response = ssm.get_parameter(
-            Name=f"/{name_prefix}/knowledge-base-id",
+            Name=knowledge_base_param_path,
             WithDecryption=False
         )
         return response['Parameter']['Value']
@@ -49,14 +52,14 @@ def create_agent(session_id=None):
     # Configure the retrieve tool with the knowledge base
     retrieve_config = {
         "knowledge_base_id": kb_id,
-        "model_id": "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "model_id": os.environ.get('MODEL_ID', 'anthropic.claude-opus-4-20250514-v1:0'),
         "region_name": os.environ.get('AWS_REGION', 'us-east-1')
     }
     
-    # Create the agent with Claude 3 Sonnet
+    # Create the agent with the configured model
     agent = Agent(
         model=BedrockModel(
-            model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            model_id=os.environ.get('MODEL_ID', 'anthropic.claude-opus-4-20250514-v1:0'),
             max_tokens=4096
         ),
         system_prompt=system_prompt,
@@ -73,61 +76,72 @@ def create_agent(session_id=None):
         ]
     )
     
-    # Restore session if provided
+    # Try to restore session from DynamoDB if session_id is provided
     if session_id:
         try:
-            # Get S3 bucket name from environment
-            bucket_name = os.environ.get('SESSION_BUCKET_NAME')
+            # Get the DynamoDB table name from environment or use default
+            table_name = os.environ.get('SESSION_TABLE_NAME', 'pricing-agent-sessions')
             
-            if bucket_name:
-                # Initialize S3 client
-                s3 = boto3.client('s3')
-                
-                # Try to get session data
-                response = s3.get_object(
-                    Bucket=bucket_name,
-                    Key=f"sessions/{session_id}.json"
-                )
-                
+            # Initialize DynamoDB client and table
+            dynamodb = boto3.resource('dynamodb')
+            session_table = dynamodb.Table(table_name)
+            
+            # Try to get session data
+            response = session_table.get_item(Key={'session_id': session_id})
+            
+            if 'Item' in response:
                 # Parse session data
-                session_data = json.loads(response['Body'].read().decode('utf-8'))
+                session_data = response['Item']
+                messages = json.loads(session_data.get('messages', '[]'))
                 
                 # Restore messages to agent
-                if 'messages' in session_data:
-                    agent.messages = session_data['messages']
+                if messages:
+                    agent.messages = messages
+                    print(f"Restored session {session_id} with {len(messages)} messages")
+                else:
+                    print(f"Session {session_id} exists but has no messages")
+            else:
+                print(f"Creating new session with ID: {session_id}")
         except Exception as e:
-            print(f"Error restoring session: {str(e)}")
-            # If any error occurs, just use a new session
-            pass
+            print(f"Error restoring session from DynamoDB: {str(e)}")
+            print(f"Proceeding with new session: {session_id}")
     
     return agent
 
 def save_agent_session(agent, session_id):
-    """Save the agent session to S3 for persistence"""
-    try:
-        # Get S3 bucket name from environment
-        bucket_name = os.environ.get('SESSION_BUCKET_NAME')
-        
-        if bucket_name and session_id:
-            # Initialize S3 client
-            s3 = boto3.client('s3')
-            
-            # Prepare session data
-            session_data = {
-                "messages": agent.messages
-            }
-            
-            # Save to S3
-            s3.put_object(
-                Bucket=bucket_name,
-                Key=f"sessions/{session_id}.json",
-                Body=json.dumps(session_data),
-                ContentType="application/json"
-            )
-            
-            return True
-    except Exception as e:
-        print(f"Error saving session: {str(e)}")
-        return False
+    """Save the agent session state to DynamoDB
     
-    return False
+    Persists the agent's message history to DynamoDB for session continuity
+    across application restarts and multiple instances.
+    
+    Args:
+        agent: The Strands Agent instance to save
+        session_id: Unique identifier for the user session
+        
+    Returns:
+        bool: True if session was saved successfully, False otherwise
+    """
+    try:
+        # Get the DynamoDB table name from environment or use default
+        table_name = os.environ.get('SESSION_TABLE_NAME', 'pricing-agent-sessions')
+        
+        # Initialize DynamoDB client and table
+        dynamodb = boto3.resource('dynamodb')
+        session_table = dynamodb.Table(table_name)
+        
+        # Prepare session data
+        session_data = {
+            'session_id': session_id,
+            'messages': json.dumps(agent.messages),
+            'last_updated': datetime.now().isoformat(),
+            'ttl': int((datetime.now().timestamp() + (30 * 24 * 60 * 60)))  # 30 days TTL
+        }
+        
+        # Save to DynamoDB
+        session_table.put_item(Item=session_data)
+        
+        print(f"Session {session_id} saved to DynamoDB")
+        return True
+    except Exception as e:
+        print(f"Error saving session to DynamoDB: {str(e)}")
+        return False

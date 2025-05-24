@@ -87,8 +87,6 @@ resource "aws_iam_policy" "ecs_task_policy" {
           "s3:ListBucket"
         ]
         Resource = [
-          aws_s3_bucket.session.arn,
-          "${aws_s3_bucket.session.arn}/*",
           aws_s3_bucket.policy.arn,
           "${aws_s3_bucket.policy.arn}/*"
         ]
@@ -107,7 +105,8 @@ resource "aws_iam_policy" "ecs_task_policy" {
         ]
         Resource = [
           aws_dynamodb_table.pricing.arn,
-          aws_dynamodb_table.inventory.arn
+          aws_dynamodb_table.inventory.arn,
+          aws_dynamodb_table.sessions.arn
         ]
       },
       {
