@@ -2,9 +2,19 @@ name: Destroy Pricing Agent Infrastructure
 
 on:
   workflow_dispatch:  # Manual trigger only
+    inputs:
+      environment:
+        description: 'Environment to destroy (dev, staging, prod)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
 
 env:
-  ENVIRONMENT: dev  # Default environment, can be overridden in repository secrets
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}  # Use input or default to dev
 
 jobs:
   destroy:
@@ -38,19 +48,23 @@ jobs:
           # Print the bucket name for debugging
           echo "Using S3 bucket: $BUCKET_NAME"
       
-      - name: Terraform Init
+      - name: Terraform Init and Workspace Setup
         working-directory: ./infrastructure
         run: |
           # Print environment variables for debugging
           echo "Using S3 bucket: $TF_BUCKET_NAME"
           echo "Using AWS region: ${{ secrets.AWS_REGION }}"
+          echo "Using environment: ${ENVIRONMENT}"
           
-          # Initialize with S3 backend
+          # Initialize Terraform with S3 backend
           terraform init \
             -backend-config="bucket=$TF_BUCKET_NAME" \
-            -backend-config="key=pricing-agent-${{ env.ENVIRONMENT }}/terraform.tfstate" \
+            -backend-config="key=terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}" \
             -backend-config="encrypt=true"
+            
+          # Select workspace based on environment
+          terraform workspace select ${ENVIRONMENT} || echo "Workspace ${ENVIRONMENT} not found, nothing to destroy"
       
 
       
