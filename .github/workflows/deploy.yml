@@ -520,18 +520,64 @@ jobs:
       
       - name: Output Deployment Information
         run: |
-          # Get ALB DNS from Terraform
+          # Get ALB DNS from Terraform and save to a file to avoid obfuscation
           cd infrastructure
-          ALB_DNS=$(terraform output alb_dns_name 2>/dev/null | tr -d '"' || echo 'Not available')
+          terraform output -json > tf_outputs.json
+          ALB_DNS=$(cat tf_outputs.json | jq -r '.alb_dns_name.value // "Not available"')
+          VPC_ID=$(cat tf_outputs.json | jq -r '.vpc_id.value // "Not available"')
           
-          # Simple output with just the essential information
-          echo "\n🎉 PRICING AGENT DEPLOYMENT COMPLETE 🎉\n"
+          # Create a clear deployment summary
+          echo "\n=================================================================="
+          echo "🎉 PRICING AGENT DEPLOYMENT SUMMARY - ${ENVIRONMENT} ENVIRONMENT 🎉"
+          echo "==================================================================\n"
           
+          echo "📊 INFRASTRUCTURE DETAILS:"
+          echo "-------------------------"
+          echo "Environment: ${ENVIRONMENT}"
+          echo "VPC ID: $VPC_ID"
+          
+          # Get target group ARN without obfuscation
+          TG_ARN=$(aws elbv2 describe-target-groups \
+            --name pricing-agent-${ENVIRONMENT}-tg \
+            --query 'TargetGroups[0].TargetGroupArn' \
+            --output text 2>/dev/null || echo "Not available")
+          
+          # Extract just the ID portion from the ARN
+          if [[ "$TG_ARN" != "Not available" ]]; then
+            TG_ID=$(echo $TG_ARN | awk -F'/' '{print $2}')
+            echo "Target Group: pricing-agent-${ENVIRONMENT}-tg ($TG_ID)"
+          else
+            echo "Target Group: Not available"
+          fi
+          
+          # Get ECS cluster and service status
+          CLUSTER_NAME="pricing-agent-${ENVIRONMENT}-cluster"
+          SERVICE_NAME="pricing-agent-${ENVIRONMENT}-service"
+          
+          SERVICE_STATUS=$(aws ecs describe-services \
+            --cluster $CLUSTER_NAME \
+            --services $SERVICE_NAME \
+            --query "services[0].status" \
+            --output text 2>/dev/null || echo "NOT_FOUND")
+          
+          echo "ECS Cluster: $CLUSTER_NAME"
+          echo "ECS Service: $SERVICE_NAME ($SERVICE_STATUS)"
+          
+          echo "\n🔗 ACCESS INFORMATION:"
+          echo "-------------------------"
           if [[ "$ALB_DNS" != "Not available" ]]; then
             echo "APPLICATION URL: http://$ALB_DNS"
           else
             echo "APPLICATION URL: Check AWS Console for ALB DNS name"
           fi
+          
+          echo "\n📝 DEPLOYMENT NOTES:"
+          echo "-------------------------"
+          echo "- All resources are deployed in the same VPC"
+          echo "- Using Terraform workspace: ${ENVIRONMENT}"
+          echo "- Model: ${MODEL}"
+          
+          echo "\n==================================================================\n"
         env:
           ENVIRONMENT: ${{ env.ENVIRONMENT }}
           AWS_REGION: ${{ env.AWS_REGION }}
