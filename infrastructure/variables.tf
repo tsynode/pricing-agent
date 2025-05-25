@@ -59,10 +59,7 @@ variable "health_check_path" {
 }
 
 variable "model_id" {
-  description = "Bedrock model ID for AI models. Available options:
-    - anthropic.claude-opus-4-20250514-v1:0 (Claude Opus 4, most powerful)
-    - anthropic.claude-sonnet-4-20250514-v1:0 (Claude Sonnet 4, balanced)
-    - anthropic.claude-3-7-sonnet-20250219-v1:0 (Claude 3.7 Sonnet, legacy)"
+  description = "Bedrock model ID for AI models. Available options: anthropic.claude-opus-4-20250514-v1:0 (Claude Opus 4), anthropic.claude-sonnet-4-20250514-v1:0 (Claude Sonnet 4), anthropic.claude-3-7-sonnet-20250219-v1:0 (Claude 3.7 Sonnet)"
   type        = string
   default     = "anthropic.claude-opus-4-20250514-v1:0"
 }
