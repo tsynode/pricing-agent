@@ -32,7 +32,7 @@ else
   
   # Import VPC
   echo "Importing VPC..."
-  terraform state rm aws_vpc.main 2>/dev/null || echo "No state to remove"
+  terraform state rm aws_vpc.main 2>/dev/null || true
   terraform import aws_vpc.main $VPC_ID
   
   # Get public subnets
@@ -45,7 +45,7 @@ else
     INDEX=0
     for SUBNET_ID in $PUBLIC_SUBNETS; do
       echo "Importing public subnet $SUBNET_ID at index $INDEX..."
-      terraform state rm "aws_subnet.public[$INDEX]" 2>/dev/null || echo "No state to remove"
+      terraform state rm "aws_subnet.public[$INDEX]" 2>/dev/null || true
       terraform import "aws_subnet.public[$INDEX]" $SUBNET_ID
       INDEX=$((INDEX+1))
     done
@@ -61,7 +61,7 @@ else
     INDEX=0
     for SUBNET_ID in $PRIVATE_SUBNETS; do
       echo "Importing private subnet $SUBNET_ID at index $INDEX..."
-      terraform state rm "aws_subnet.private[$INDEX]" 2>/dev/null || echo "No state to remove"
+      terraform state rm "aws_subnet.private[$INDEX]" 2>/dev/null || true
       terraform import "aws_subnet.private[$INDEX]" $SUBNET_ID
       INDEX=$((INDEX+1))
     done
@@ -72,7 +72,7 @@ else
   IGW_ID=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$VPC_ID" --query "InternetGateways[0].InternetGatewayId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
   if [[ "$IGW_ID" != "NOT_FOUND" && "$IGW_ID" != "None" ]]; then
     echo "Importing Internet Gateway $IGW_ID..."
-    terraform state rm aws_internet_gateway.main 2>/dev/null || echo "No state to remove"
+    terraform state rm aws_internet_gateway.main 2>/dev/null || true
     terraform import aws_internet_gateway.main $IGW_ID
   fi
   
@@ -83,7 +83,7 @@ else
   PUBLIC_RT=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-public-rt" --query "RouteTables[0].RouteTableId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
   if [[ "$PUBLIC_RT" != "NOT_FOUND" && "$PUBLIC_RT" != "None" ]]; then
     echo "Importing public route table $PUBLIC_RT..."
-    terraform state rm aws_route_table.public 2>/dev/null || echo "No state to remove"
+    terraform state rm aws_route_table.public 2>/dev/null || true
     terraform import aws_route_table.public $PUBLIC_RT
     
     # Import public route table associations
@@ -94,7 +94,7 @@ else
         # For route table associations, we need to use the format 'subnet_id/route_table_id'
         if [[ -n "$SUBNET_ID" && "$SUBNET_ID" != "None" && -n "$PUBLIC_RT" && "$PUBLIC_RT" != "None" ]]; then
           echo "Importing public route table association for subnet $SUBNET_ID with route table $PUBLIC_RT"
-          terraform state rm "aws_route_table_association.public[$INDEX]" 2>/dev/null || echo "No state to remove"
+          terraform state rm "aws_route_table_association.public[$INDEX]" 2>/dev/null || true
           terraform import "aws_route_table_association.public[$INDEX]" "$SUBNET_ID/$PUBLIC_RT"
         fi
         INDEX=$((INDEX+1))
@@ -109,7 +109,7 @@ else
     PRIVATE_RT=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-rt-$((INDEX+1))" --query "RouteTables[0].RouteTableId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
     if [[ "$PRIVATE_RT" != "NOT_FOUND" && "$PRIVATE_RT" != "None" ]]; then
       echo "Importing private route table $PRIVATE_RT at index $INDEX..."
-      terraform state rm "aws_route_table.private[$INDEX]" 2>/dev/null || echo "No state to remove"
+      terraform state rm "aws_route_table.private[$INDEX]" 2>/dev/null || true
       terraform import "aws_route_table.private[$INDEX]" $PRIVATE_RT
       
       # Get the private subnet ID for this AZ
@@ -118,7 +118,7 @@ else
         # For route table associations, we need to use the format 'subnet_id/route_table_id'
         if [[ -n "$SUBNET_ID" && "$SUBNET_ID" != "None" && -n "$PRIVATE_RT" && "$PRIVATE_RT" != "None" ]]; then
           echo "Importing private route table association for subnet $SUBNET_ID with route table $PRIVATE_RT"
-          terraform state rm "aws_route_table_association.private[$INDEX]" 2>/dev/null || echo "No state to remove"
+          terraform state rm "aws_route_table_association.private[$INDEX]" 2>/dev/null || true
           terraform import "aws_route_table_association.private[$INDEX]" "$SUBNET_ID/$PRIVATE_RT"
         fi
       fi
@@ -133,7 +133,7 @@ else
   ALB_SG=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-alb-sg" --query "SecurityGroups[0].GroupId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
   if [[ "$ALB_SG" != "NOT_FOUND" && "$ALB_SG" != "None" ]]; then
     echo "Importing ALB security group $ALB_SG..."
-    terraform state rm aws_security_group.alb 2>/dev/null || echo "No state to remove"
+    terraform state rm aws_security_group.alb 2>/dev/null || true
     terraform import aws_security_group.alb $ALB_SG
   fi
   
@@ -141,7 +141,7 @@ else
   ECS_SG=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-ecs-sg" --query "SecurityGroups[0].GroupId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
   if [[ "$ECS_SG" != "NOT_FOUND" && "$ECS_SG" != "None" ]]; then
     echo "Importing ECS security group $ECS_SG..."
-    terraform state rm aws_security_group.ecs 2>/dev/null || echo "No state to remove"
+    terraform state rm aws_security_group.ecs 2>/dev/null || true
     terraform import aws_security_group.ecs $ECS_SG
   fi
 fi
@@ -153,7 +153,7 @@ echo "Checking for existing DynamoDB tables..."
 PRICING_TABLE_EXISTS=$(aws dynamodb describe-table --table-name pricing-agent-${ENVIRONMENT}-pricing-rules --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
 if [[ "$PRICING_TABLE_EXISTS" != "NOT_FOUND" ]]; then
   echo "Importing existing pricing table..."
-  terraform state rm aws_dynamodb_table.pricing 2>/dev/null || echo "No state to remove"
+  terraform state rm aws_dynamodb_table.pricing 2>/dev/null || true
   terraform import aws_dynamodb_table.pricing pricing-agent-${ENVIRONMENT}-pricing-rules
 fi
 
@@ -161,7 +161,7 @@ fi
 INVENTORY_TABLE_EXISTS=$(aws dynamodb describe-table --table-name pricing-agent-${ENVIRONMENT}-inventory --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
 if [[ "$INVENTORY_TABLE_EXISTS" != "NOT_FOUND" ]]; then
   echo "Importing existing inventory table..."
-  terraform state rm aws_dynamodb_table.inventory 2>/dev/null || echo "No state to remove"
+  terraform state rm aws_dynamodb_table.inventory 2>/dev/null || true
   terraform import aws_dynamodb_table.inventory pricing-agent-${ENVIRONMENT}-inventory
 fi
 
@@ -169,7 +169,7 @@ fi
 SESSIONS_TABLE_EXISTS=$(aws dynamodb describe-table --table-name pricing-agent-${ENVIRONMENT}-sessions --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
 if [[ "$SESSIONS_TABLE_EXISTS" != "NOT_FOUND" ]]; then
   echo "Importing existing sessions table..."
-  terraform state rm aws_dynamodb_table.sessions 2>/dev/null || echo "No state to remove"
+  terraform state rm aws_dynamodb_table.sessions 2>/dev/null || true
   terraform import aws_dynamodb_table.sessions pricing-agent-${ENVIRONMENT}-sessions
 fi
 
@@ -180,7 +180,7 @@ echo "Checking for existing S3 buckets..."
 POLICY_BUCKET_EXISTS=$(aws s3api head-bucket --bucket pricing-agent-${ENVIRONMENT}-policies --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
 if [[ "$POLICY_BUCKET_EXISTS" != "NOT_FOUND" ]]; then
   echo "Importing existing policy bucket..."
-  terraform state rm aws_s3_bucket.policy 2>/dev/null || echo "No state to remove"
+  terraform state rm aws_s3_bucket.policy 2>/dev/null || true
   terraform import aws_s3_bucket.policy pricing-agent-${ENVIRONMENT}-policies
 fi
 
@@ -188,7 +188,7 @@ fi
 SESSION_BUCKET_EXISTS=$(aws s3api head-bucket --bucket pricing-agent-${ENVIRONMENT}-sessions --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
 if [[ "$SESSION_BUCKET_EXISTS" != "NOT_FOUND" ]]; then
   echo "Importing existing session bucket..."
-  terraform state rm aws_s3_bucket.session 2>/dev/null || echo "No state to remove"
+  terraform state rm aws_s3_bucket.session 2>/dev/null || true
   terraform import aws_s3_bucket.session pricing-agent-${ENVIRONMENT}-sessions
 fi
 
@@ -199,7 +199,7 @@ echo "Checking for existing IAM roles..."
 ECS_EXEC_ROLE=$(aws iam get-role --role-name pricing-agent-${ENVIRONMENT}-ecs-execution-role 2>/dev/null | jq -r '.Role.RoleName' || echo "NOT_FOUND")
 if [[ "$ECS_EXEC_ROLE" != "NOT_FOUND" ]]; then
   echo "Importing existing ECS execution role..."
-  terraform state rm aws_iam_role.ecs_execution 2>/dev/null || echo "No state to remove"
+  terraform state rm aws_iam_role.ecs_execution 2>/dev/null || true
   terraform import aws_iam_role.ecs_execution pricing-agent-${ENVIRONMENT}-ecs-execution-role
 fi
 
@@ -207,10 +207,8 @@ fi
 ECS_TASK_ROLE=$(aws iam get-role --role-name pricing-agent-${ENVIRONMENT}-ecs-task-role 2>/dev/null | jq -r '.Role.RoleName' || echo "NOT_FOUND")
 if [[ "$ECS_TASK_ROLE" != "NOT_FOUND" ]]; then
   echo "Importing existing ECS task role..."
-  terraform state rm aws_iam_role.ecs_task 2>/dev/null || echo "No state to remove"
+  terraform state rm aws_iam_role.ecs_task 2>/dev/null || true
   terraform import aws_iam_role.ecs_task pricing-agent-${ENVIRONMENT}-ecs-task-role
 fi
 
-echo "✅ Import process completed successfully!"
-echo "You can now run 'terraform plan' to see what changes would be made."
-echo "Then run 'terraform apply' to apply those changes."
+echo "✅ Import script completed successfully"
