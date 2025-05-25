@@ -198,7 +198,14 @@ jobs:
             terraform import aws_dynamodb_table.pricing pricing-agent-${ENVIRONMENT}-pricing-rules || echo "Import failed, but continuing"
           fi
           
-          # Check if S3 policy bucket exists
+          # Check if sessions table exists
+          SESSIONS_TABLE_EXISTS=$(aws dynamodb describe-table --table-name pricing-agent-${ENVIRONMENT}-sessions 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$SESSIONS_TABLE_EXISTS" != "NOT_FOUND" ]]; then
+            echo "Importing existing sessions table..."
+            terraform import aws_dynamodb_table.sessions pricing-agent-${ENVIRONMENT}-sessions || echo "Import failed, but continuing"
+          fi
+          
+          # Check if S3 session bucket exists
           echo "Checking for existing S3 buckets..."
           POLICY_BUCKET_EXISTS=$(aws s3api head-bucket --bucket pricing-agent-${ENVIRONMENT}-policies 2>/dev/null || echo "NOT_FOUND")
           if [[ "$POLICY_BUCKET_EXISTS" != "NOT_FOUND" ]]; then
@@ -313,6 +320,49 @@ jobs:
           if [[ "$IGW_ID" != "NOT_FOUND" && "$IGW_ID" != "None" ]]; then
             echo "Importing existing Internet Gateway: $IGW_ID"
             terraform import aws_internet_gateway.main $IGW_ID || echo "Import failed, but continuing"
+          fi
+          
+          # Check for existing route tables
+          echo "Checking for existing route tables..."
+          PUBLIC_RT=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-public-rt" --query "RouteTables[0].RouteTableId" --output text 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$PUBLIC_RT" != "NOT_FOUND" && "$PUBLIC_RT" != "None" ]]; then
+            echo "Importing existing public route table: $PUBLIC_RT"
+            terraform import aws_route_table.public $PUBLIC_RT || echo "Import failed, but continuing"
+            
+            # Import public route table associations
+            if [[ -n "$PUBLIC_SUBNETS" && "$PUBLIC_SUBNETS" != "None" ]]; then
+              echo "Checking for existing public route table associations..."
+              INDEX=0
+              for SUBNET_ID in $PUBLIC_SUBNETS; do
+                RT_ASSOC=$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$SUBNET_ID" --query "RouteTables[0].Associations[?SubnetId=='$SUBNET_ID'].RouteTableAssociationId" --output text 2>/dev/null || echo "NOT_FOUND")
+                if [[ "$RT_ASSOC" != "NOT_FOUND" && "$RT_ASSOC" != "None" ]]; then
+                  echo "Importing existing public route table association for subnet $SUBNET_ID: $RT_ASSOC"
+                  terraform import "aws_route_table_association.public[$INDEX]" $RT_ASSOC || echo "Import failed, but continuing"
+                fi
+                INDEX=$((INDEX+1))
+              done
+            fi
+          fi
+          
+          # Check for private route table
+          PRIVATE_RT=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-rt" --query "RouteTables[0].RouteTableId" --output text 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$PRIVATE_RT" != "NOT_FOUND" && "$PRIVATE_RT" != "None" ]]; then
+            echo "Importing existing private route table: $PRIVATE_RT"
+            terraform import aws_route_table.private $PRIVATE_RT || echo "Import failed, but continuing"
+            
+            # Import private route table associations
+            if [[ -n "$PRIVATE_SUBNETS" && "$PRIVATE_SUBNETS" != "None" ]]; then
+              echo "Checking for existing private route table associations..."
+              INDEX=0
+              for SUBNET_ID in $PRIVATE_SUBNETS; do
+                RT_ASSOC=$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$SUBNET_ID" --query "RouteTables[0].Associations[?SubnetId=='$SUBNET_ID'].RouteTableAssociationId" --output text 2>/dev/null || echo "NOT_FOUND")
+                if [[ "$RT_ASSOC" != "NOT_FOUND" && "$RT_ASSOC" != "None" ]]; then
+                  echo "Importing existing private route table association for subnet $SUBNET_ID: $RT_ASSOC"
+                  terraform import "aws_route_table_association.private[$INDEX]" $RT_ASSOC || echo "Import failed, but continuing"
+                fi
+                INDEX=$((INDEX+1))
+              done
+            fi
           fi
           
           # Apply routing components
