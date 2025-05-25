@@ -70,4 +70,3 @@ variable "certificate_arn" {
   default     = null
 }
 
-# No variable for prevent_destroy as it should be a static safety mechanism

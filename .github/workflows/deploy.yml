@@ -176,186 +176,39 @@ jobs:
       - name: Terraform Apply Infrastructure
         working-directory: ./infrastructure
         run: |
-          echo "\n🔧 Applying infrastructure with lifecycle blocks...\n"
+          echo "\n📝️ Deploying infrastructure...\n"
           
-          # Apply core infrastructure first (DynamoDB, S3, IAM)
-          echo "\n📦 Applying core infrastructure (DynamoDB, S3, IAM)...\n"
+          # Initialize Terraform
+          terraform init
           
-          # Apply DynamoDB tables - first import existing tables if they exist
-          echo "Checking for existing DynamoDB tables..."
+          # Run the import script to properly import existing resources
+          echo "\n🔍 Importing existing resources...\n"
+          cd ..
+          ENVIRONMENT=${ENVIRONMENT} AWS_REGION=${AWS_REGION} ./scripts/import_existing_resources.sh
+          cd infrastructure
           
-          # Check if inventory table exists
-          INVENTORY_TABLE_EXISTS=$(aws dynamodb describe-table --table-name pricing-agent-${ENVIRONMENT}-inventory 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$INVENTORY_TABLE_EXISTS" != "NOT_FOUND" ]]; then
-            echo "Importing existing inventory table..."
-            terraform import aws_dynamodb_table.inventory pricing-agent-${ENVIRONMENT}-inventory || echo "Import failed, but continuing"
-          fi
-          
-          # Check if pricing table exists
-          PRICING_TABLE_EXISTS=$(aws dynamodb describe-table --table-name pricing-agent-${ENVIRONMENT}-pricing-rules 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$PRICING_TABLE_EXISTS" != "NOT_FOUND" ]]; then
-            echo "Importing existing pricing table..."
-            terraform import aws_dynamodb_table.pricing pricing-agent-${ENVIRONMENT}-pricing-rules || echo "Import failed, but continuing"
-          fi
-          
-          # Check if sessions table exists
-          SESSIONS_TABLE_EXISTS=$(aws dynamodb describe-table --table-name pricing-agent-${ENVIRONMENT}-sessions 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$SESSIONS_TABLE_EXISTS" != "NOT_FOUND" ]]; then
-            echo "Importing existing sessions table..."
-            # First remove any existing state to avoid conflicts
-            terraform state rm aws_dynamodb_table.sessions 2>/dev/null || echo "No state to remove"
-            # Then import the existing table
-            terraform import aws_dynamodb_table.sessions pricing-agent-${ENVIRONMENT}-sessions || echo "Import failed, but continuing"
-          fi
-          
-          # Check if S3 session bucket exists
-          echo "Checking for existing S3 buckets..."
-          POLICY_BUCKET_EXISTS=$(aws s3api head-bucket --bucket pricing-agent-${ENVIRONMENT}-policies 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$POLICY_BUCKET_EXISTS" != "NOT_FOUND" ]]; then
-            echo "Importing existing policy bucket..."
-            terraform import aws_s3_bucket.policy pricing-agent-${ENVIRONMENT}-policies || echo "Import failed, but continuing"
-          fi
-          
-          # Check if S3 session bucket exists
-          SESSION_BUCKET_EXISTS=$(aws s3api head-bucket --bucket pricing-agent-${ENVIRONMENT}-sessions 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$SESSION_BUCKET_EXISTS" != "NOT_FOUND" ]]; then
-            echo "Importing existing session bucket..."
-            terraform import aws_s3_bucket.session pricing-agent-${ENVIRONMENT}-sessions || echo "Import failed, but continuing"
-          fi
-          
-          echo "Applying DynamoDB tables..."
+          # Apply core infrastructure first
+          echo "\n🧱 Applying core infrastructure...\n"
           terraform apply -auto-approve \
             -target=aws_dynamodb_table.inventory \
-            -target=aws_dynamodb_table.pricing || echo "DynamoDB tables already exist, continuing with S3 buckets"
-          
-          echo "Applying S3 buckets..."
-          terraform apply -auto-approve \
+            -target=aws_dynamodb_table.pricing \
+            -target=aws_dynamodb_table.sessions \
             -target=aws_s3_bucket.policy \
-            -target=aws_s3_bucket.session || echo "S3 buckets already exist, continuing with configurations"
-          
-          # Apply S3 bucket configurations
-          echo "Applying S3 bucket configurations..."
-          terraform apply -auto-approve \
-            -target=aws_s3_bucket_versioning.policy_versioning \
-            -target=aws_s3_bucket_versioning.session_versioning \
-            -target=aws_s3_bucket_server_side_encryption_configuration.policy_encryption \
-            -target=aws_s3_bucket_server_side_encryption_configuration.session_encryption \
-            -target=aws_s3_bucket_lifecycle_configuration.session_lifecycle
-          
-          # Apply IAM roles and policies - first import existing resources if they exist
-          echo "Checking for existing IAM roles and policies..."
-          
-          # Check if ECS execution role exists
-          ECS_EXEC_ROLE_EXISTS=$(aws iam get-role --role-name pricing-agent-${ENVIRONMENT}-ecs-execution-role 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$ECS_EXEC_ROLE_EXISTS" != "NOT_FOUND" ]]; then
-            echo "Importing existing ECS execution role..."
-            terraform import aws_iam_role.ecs_execution pricing-agent-${ENVIRONMENT}-ecs-execution-role || echo "Import failed, but continuing"
-          fi
-          
-          # Check if ECS task role exists
-          ECS_TASK_ROLE_EXISTS=$(aws iam get-role --role-name pricing-agent-${ENVIRONMENT}-ecs-task-role 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$ECS_TASK_ROLE_EXISTS" != "NOT_FOUND" ]]; then
-            echo "Importing existing ECS task role..."
-            terraform import aws_iam_role.ecs_task pricing-agent-${ENVIRONMENT}-ecs-task-role || echo "Import failed, but continuing"
-          fi
-          
-          # Check if ECS task policy exists
-          ECS_TASK_POLICY_EXISTS=$(aws iam get-policy --policy-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/pricing-agent-${ENVIRONMENT}-ecs-task-policy 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$ECS_TASK_POLICY_EXISTS" != "NOT_FOUND" ]]; then
-            echo "Importing existing ECS task policy..."
-            terraform import aws_iam_policy.ecs_task_policy arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/pricing-agent-${ENVIRONMENT}-ecs-task-policy || echo "Import failed, but continuing"
-          fi
-          
-          echo "Applying IAM roles and policies..."
-          terraform apply -auto-approve \
-            -target=aws_iam_role.ecs_task \
+            -target=aws_s3_bucket.session \
             -target=aws_iam_role.ecs_execution \
-            -target=aws_iam_policy.ecs_task_policy \
-            -target=aws_iam_role_policy_attachment.ecs_task \
-            -target=aws_iam_role_policy_attachment.ecs_execution || echo "Some IAM resources already exist, continuing with other resources"
+            -target=aws_iam_role.ecs_task
           
-          # Apply networking components (VPC, subnets, security groups, ALB)
+          # Apply networking components
           echo "\n🌐 Applying networking components...\n"
-          
-          # Check for existing VPC
-          echo "Checking for existing VPC..."
-          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$VPC_ID" != "NOT_FOUND" && "$VPC_ID" != "None" ]]; then
-            echo "Importing existing VPC: $VPC_ID"
-            terraform import aws_vpc.main $VPC_ID || echo "Import failed, but continuing"
-            
-            # Get subnet information for the VPC
-            echo "Looking for subnets in VPC $VPC_ID"
-            PUBLIC_SUBNETS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-public-*" --query "Subnets[*].SubnetId" --output text)
-            PRIVATE_SUBNETS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-*" --query "Subnets[*].SubnetId" --output text)
-            
-            # Import public subnets
-            if [[ -n "$PUBLIC_SUBNETS" && "$PUBLIC_SUBNETS" != "None" ]]; then
-              echo "Importing public subnets: $PUBLIC_SUBNETS"
-              INDEX=0
-              for SUBNET_ID in $PUBLIC_SUBNETS; do
-                terraform import "aws_subnet.public[$INDEX]" $SUBNET_ID || echo "Import failed, but continuing"
-                INDEX=$((INDEX+1))
-              done
-            fi
-            
-            # Import private subnets
-            if [[ -n "$PRIVATE_SUBNETS" && "$PRIVATE_SUBNETS" != "None" ]]; then
-              echo "Importing private subnets: $PRIVATE_SUBNETS"
-              INDEX=0
-              for SUBNET_ID in $PRIVATE_SUBNETS; do
-                terraform import "aws_subnet.private[$INDEX]" $SUBNET_ID || echo "Import failed, but continuing"
-                INDEX=$((INDEX+1))
-              done
-            fi
-          fi
-          
-          # Apply VPC and subnets
-          echo "Applying VPC and subnets..."
           terraform apply -auto-approve \
             -target=aws_vpc.main \
             -target=aws_subnet.public \
-            -target=aws_subnet.private
-          
-          # Check for existing routing components
-          echo "Checking for existing routing components..."
-          IGW_ID=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$VPC_ID" --query "InternetGateways[0].InternetGatewayId" --output text 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$IGW_ID" != "NOT_FOUND" && "$IGW_ID" != "None" ]]; then
-            echo "Importing existing Internet Gateway: $IGW_ID"
-            terraform import aws_internet_gateway.main $IGW_ID || echo "Import failed, but continuing"
-          fi
-          
-          # Check for existing route tables
-          echo "Checking for existing route tables..."
-          PUBLIC_RT=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-public-rt" --query "RouteTables[0].RouteTableId" --output text 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$PUBLIC_RT" != "NOT_FOUND" && "$PUBLIC_RT" != "None" ]]; then
-            echo "Importing existing public route table: $PUBLIC_RT"
-            terraform import aws_route_table.public $PUBLIC_RT || echo "Import failed, but continuing"
-          fi
-          
-          # For route table associations with the new for_each approach, we need to handle them differently
-          echo "Removing any existing route table associations from Terraform state..."
-          
-          # Remove all existing route table associations from state to start fresh
-          terraform state list | grep aws_route_table_association || echo "No route table associations in state"
-          terraform state list | grep aws_route_table_association | xargs -r terraform state rm || echo "No state to remove"
-          
-          # We'll skip importing route table associations since we're using for_each with ignore_changes = all
-          # This approach allows Terraform to create logical resources without trying to modify existing AWS resources
-          echo "Route table associations will be handled by lifecycle ignore_changes"
-          
-          # Check for private route table
-          PRIVATE_RT=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-rt" --query "RouteTables[0].RouteTableId" --output text 2>/dev/null || echo "NOT_FOUND")
-          if [[ "$PRIVATE_RT" != "NOT_FOUND" && "$PRIVATE_RT" != "None" ]]; then
-            echo "Importing existing private route table: $PRIVATE_RT"
-            terraform import aws_route_table.private $PRIVATE_RT || echo "Import failed, but continuing"
-          fi
-          
-          # Note: Route table associations are now handled by the earlier state removal step
-          # and the lifecycle ignore_changes in the Terraform configuration
+            -target=aws_subnet.private \
+            -target=aws_security_group.alb \
+            -target=aws_security_group.ecs
           
           # Apply routing components
-          echo "Applying routing components..."
+          echo "\n🛣️ Applying routing components...\n"
           terraform apply -auto-approve \
             -target=aws_internet_gateway.main \
             -target=aws_route_table.public \

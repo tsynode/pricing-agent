@@ -150,35 +150,35 @@ resource "aws_route_table" "private" {
 }
 
 # Route table association for public subnets
-# Using for_each instead of count to better handle existing associations
 resource "aws_route_table_association" "public" {
-  for_each       = { for i, az in var.availability_zones : i => az }
-  subnet_id      = aws_subnet.public[each.key].id
+  count          = length(var.availability_zones)
+  subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
   
-  # This prevents conflicts with existing route table associations
+  # This prevents unnecessary recreation of route table associations
+  # while still allowing Terraform to manage them properly
   lifecycle {
     create_before_destroy = true
-    # Completely ignore changes to prevent conflicts with existing associations
-    ignore_changes = all
+    # Only ignore changes to the route_table_id to prevent conflicts
+    # with existing associations while still allowing subnet_id to be managed
+    ignore_changes = [route_table_id]
   }
-  
-  depends_on = [aws_subnet.public, aws_route_table.public]
 }
 
 # Route table association for private subnets
 # Associates the private subnets with their respective route tables
-# Using for_each instead of count to better handle existing associations
 resource "aws_route_table_association" "private" {
-  for_each       = { for i, az in var.availability_zones : i => az }
-  subnet_id      = aws_subnet.private[each.key].id
-  route_table_id = aws_route_table.private[each.key].id
+  count          = length(var.availability_zones)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
   
-  # This prevents conflicts with existing route table associations
+  # This prevents unnecessary recreation of route table associations
+  # while still allowing Terraform to manage them properly
   lifecycle {
     create_before_destroy = true
-    # Completely ignore changes to prevent conflicts with existing associations
-    ignore_changes = all
+    # Only ignore changes to the route_table_id to prevent conflicts
+    # with existing associations while still allowing subnet_id to be managed
+    ignore_changes = [route_table_id]
   }
   
   # Explicit dependency on private subnets and route tables
