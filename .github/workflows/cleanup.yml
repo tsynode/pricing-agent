@@ -32,6 +32,27 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
+          
+      - name: Verify AWS credentials
+        run: |
+          echo "🔑 Verifying AWS credentials..."
+          
+          # Check if credentials are valid
+          if ! aws sts get-caller-identity &>/dev/null; then
+            echo "::error::AWS credentials have expired. Please update the GitHub repository secrets with fresh credentials."
+            echo "\n⚠️ CLEANUP FAILED: AWS CREDENTIALS EXPIRED ⚠️\n"
+            echo "To fix this issue:"
+            echo "1. Generate new AWS credentials"
+            echo "2. Update the GitHub repository secrets:"
+            echo "   - AWS_ACCESS_KEY_ID"
+            echo "   - AWS_SECRET_ACCESS_KEY"
+            echo "   - AWS_SESSION_TOKEN"
+            echo "3. Run the cleanup workflow again"
+            exit 1
+          else
+            IDENTITY=$(aws sts get-caller-identity --query 'Arn' --output text)
+            echo "✅ AWS credentials are valid: $IDENTITY"
+          fi
       
       - name: Set environment variables
         run: |
