@@ -154,6 +154,12 @@ resource "aws_route_table_association" "public" {
   count          = length(var.availability_zones)
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
+  
+  # This prevents conflicts with existing route table associations
+  # while still allowing Terraform to manage them
+  lifecycle {
+    ignore_changes = [route_table_id, subnet_id]
+  }
 }
 
 # Route table association for private subnets
@@ -162,6 +168,12 @@ resource "aws_route_table_association" "private" {
   count          = length(var.availability_zones)
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
+  
+  # This prevents conflicts with existing route table associations
+  # while still allowing Terraform to manage them
+  lifecycle {
+    ignore_changes = [route_table_id, subnet_id]
+  }
   
   # Explicit dependency on private subnets and route tables
   depends_on = [

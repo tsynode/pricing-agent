@@ -85,7 +85,9 @@ resource "aws_dynamodb_table" "sessions" {
       stream_enabled,
       stream_view_type,
       hash_key,
-      attribute
+      attribute,
+      billing_mode,  # Added to prevent conflicts with existing tables
+      ttl            # Added to prevent conflicts with existing tables
     ]
   }
   
