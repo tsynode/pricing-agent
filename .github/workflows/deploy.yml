@@ -202,6 +202,9 @@ jobs:
           SESSIONS_TABLE_EXISTS=$(aws dynamodb describe-table --table-name pricing-agent-${ENVIRONMENT}-sessions 2>/dev/null || echo "NOT_FOUND")
           if [[ "$SESSIONS_TABLE_EXISTS" != "NOT_FOUND" ]]; then
             echo "Importing existing sessions table..."
+            # First remove any existing state to avoid conflicts
+            terraform state rm aws_dynamodb_table.sessions 2>/dev/null || echo "No state to remove"
+            # Then import the existing table
             terraform import aws_dynamodb_table.sessions pricing-agent-${ENVIRONMENT}-sessions || echo "Import failed, but continuing"
           fi
           
@@ -330,56 +333,26 @@ jobs:
             terraform import aws_route_table.public $PUBLIC_RT || echo "Import failed, but continuing"
           fi
           
-          # For route table associations, we'll use a better approach with state management
-          # First, let's check if the associations already exist in the state
-          echo "Checking for existing route table associations in Terraform state..."
+          # For route table associations with the new for_each approach, we need to handle them differently
+          echo "Removing any existing route table associations from Terraform state..."
           
-          # Get public subnets and their associations
-          if [[ -n "$PUBLIC_SUBNETS" && "$PUBLIC_SUBNETS" != "None" ]]; then
-            echo "Checking public subnet route table associations..."
-            INDEX=0
-            for SUBNET_ID in $PUBLIC_SUBNETS; do
-              # Try to find the existing association
-              RT_ASSOC=$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$SUBNET_ID" --query "RouteTables[0].Associations[?SubnetId=='$SUBNET_ID'].RouteTableAssociationId" --output text 2>/dev/null || echo "NOT_FOUND")
-              if [[ "$RT_ASSOC" != "NOT_FOUND" && "$RT_ASSOC" != "None" ]]; then
-                echo "Found existing public route table association for subnet $SUBNET_ID: $RT_ASSOC"
-                
-                # First remove any existing state for this association to avoid conflicts
-                terraform state rm "aws_route_table_association.public[$INDEX]" 2>/dev/null || echo "No state to remove"
-                
-                # Then import the existing association
-                terraform import "aws_route_table_association.public[$INDEX]" "$RT_ASSOC" || echo "Import failed, but continuing"
-              fi
-              INDEX=$((INDEX+1))
-            done
-          fi
+          # Remove all existing route table associations from state to start fresh
+          terraform state list | grep aws_route_table_association || echo "No route table associations in state"
+          terraform state list | grep aws_route_table_association | xargs -r terraform state rm || echo "No state to remove"
+          
+          # We'll skip importing route table associations since we're using for_each with ignore_changes = all
+          # This approach allows Terraform to create logical resources without trying to modify existing AWS resources
+          echo "Route table associations will be handled by lifecycle ignore_changes"
           
           # Check for private route table
           PRIVATE_RT=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-rt" --query "RouteTables[0].RouteTableId" --output text 2>/dev/null || echo "NOT_FOUND")
           if [[ "$PRIVATE_RT" != "NOT_FOUND" && "$PRIVATE_RT" != "None" ]]; then
             echo "Importing existing private route table: $PRIVATE_RT"
             terraform import aws_route_table.private $PRIVATE_RT || echo "Import failed, but continuing"
-            
-            # Get private subnets and their associations
-            if [[ -n "$PRIVATE_SUBNETS" && "$PRIVATE_SUBNETS" != "None" ]]; then
-              echo "Checking private subnet route table associations..."
-              INDEX=0
-              for SUBNET_ID in $PRIVATE_SUBNETS; do
-                # Try to find the existing association
-                RT_ASSOC=$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$SUBNET_ID" --query "RouteTables[0].Associations[?SubnetId=='$SUBNET_ID'].RouteTableAssociationId" --output text 2>/dev/null || echo "NOT_FOUND")
-                if [[ "$RT_ASSOC" != "NOT_FOUND" && "$RT_ASSOC" != "None" ]]; then
-                  echo "Found existing private route table association for subnet $SUBNET_ID: $RT_ASSOC"
-                  
-                  # First remove any existing state for this association to avoid conflicts
-                  terraform state rm "aws_route_table_association.private[$INDEX]" 2>/dev/null || echo "No state to remove"
-                  
-                  # Then import the existing association
-                  terraform import "aws_route_table_association.private[$INDEX]" "$RT_ASSOC" || echo "Import failed, but continuing"
-                fi
-                INDEX=$((INDEX+1))
-              done
-            fi
           fi
+          
+          # Note: Route table associations are now handled by the earlier state removal step
+          # and the lifecycle ignore_changes in the Terraform configuration
           
           # Apply routing components
           echo "Applying routing components..."
