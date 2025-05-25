@@ -1,6 +1,10 @@
 # Bedrock Knowledge Base Configuration
+# NOTE: Using two-stage approach for Bedrock resources
+# Stage 1: Deploy core infrastructure with placeholder in SSM Parameter Store
+# Stage 2: Create and configure Bedrock knowledge base separately
 
-# Create the Bedrock Knowledge Base
+# Commented out for initial deployment - will be created manually or in second stage
+/*
 resource "aws_bedrock_knowledge_base" "pricing_kb" {
   name        = "${local.name_prefix}-kb"
   description = "Knowledge base for pricing policies"
@@ -224,7 +228,8 @@ resource "aws_iam_role_policy_attachment" "kb_foundation_model" {
   policy_arn = aws_iam_policy.kb_foundation_model_policy.arn
 }
 
-# Create data source for the knowledge base
+# Create data source for the knowledge base - commented out for initial deployment
+/*
 resource "aws_bedrock_knowledge_base_data_source" "policy_data_source" {
   knowledge_base_id = aws_bedrock_knowledge_base.pricing_kb.id
   name              = "pricing-policies"
@@ -246,11 +251,12 @@ resource "aws_bedrock_knowledge_base_data_source" "policy_data_source" {
   }
 }
 
-# Update the SSM parameter to use the new knowledge base ID
+# Create a placeholder SSM parameter for the knowledge base ID
+# This will be updated manually or in the second stage
 resource "aws_ssm_parameter" "kb_id" {
   name  = "/${local.name_prefix}/knowledge-base-id"
   type  = "String"
-  value = aws_bedrock_knowledge_base.pricing_kb.id
+  value = "placeholder-to-be-updated-manually"
   
   # Prevent conflicts with existing parameter
   lifecycle {
