@@ -12,10 +12,16 @@ on:
           - dev
           - staging
           - prod
+      force_vpc_cleanup:
+        description: 'Force complete VPC cleanup (handles dependencies)'
+        required: false
+        default: true
+        type: boolean
 
 env:
   ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}  # Use input or default to staging
   PROJECT: 'pricing-agent'
+  FORCE_VPC_CLEANUP: ${{ github.event.inputs.force_vpc_cleanup || 'true' }}
 
 jobs:
   cleanup:
@@ -113,3 +119,73 @@ jobs:
         env:
           ENVIRONMENT: ${{ env.ENVIRONMENT }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
+          
+      - name: Run enhanced VPC cleanup
+        if: ${{ env.FORCE_VPC_CLEANUP == 'true' }}
+        run: |
+          echo "🧹 Running enhanced VPC cleanup to handle dependencies..."
+          chmod +x ./scripts/enhanced_vpc_cleanup.sh
+          ./scripts/enhanced_vpc_cleanup.sh
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          
+      - name: Check for remaining resources
+        run: |
+          echo "🔍 Checking for any remaining resources..."
+          
+          # Check for remaining VPCs
+          REMAINING_VPCS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${NAME_PREFIX}-vpc" --query "Vpcs[].VpcId" --output text || echo "")
+          if [[ -n "$REMAINING_VPCS" ]]; then
+            echo "⚠️ Warning: Found remaining VPCs: $REMAINING_VPCS"
+            echo "These VPCs still have dependencies that prevented deletion."
+            echo "You may need to manually check for:"
+            echo "- Running EC2 instances or ENIs"
+            echo "- Elastic IPs"
+            echo "- VPC endpoints"
+            echo "- VPC peering connections"
+          else
+            echo "✅ No remaining VPCs found with name ${NAME_PREFIX}-vpc"
+          fi
+          
+          # Check for remaining security groups
+          REMAINING_SGS=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=*${NAME_PREFIX}*" --query "SecurityGroups[].GroupId" --output text || echo "")
+          if [[ -n "$REMAINING_SGS" ]]; then
+            echo "⚠️ Warning: Found remaining security groups: $REMAINING_SGS"
+          else
+            echo "✅ No remaining security groups found with name containing ${NAME_PREFIX}"
+          fi
+          
+          # Check for remaining load balancers
+          REMAINING_ALBS=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName, '${NAME_PREFIX}')].LoadBalancerArn" --output text || echo "")
+          if [[ -n "$REMAINING_ALBS" ]]; then
+            echo "⚠️ Warning: Found remaining load balancers: $REMAINING_ALBS"
+          else
+            echo "✅ No remaining load balancers found with name starting with ${NAME_PREFIX}"
+          fi
+          
+          # Check for remaining target groups
+          REMAINING_TGS=$(aws elbv2 describe-target-groups --query "TargetGroups[?starts_with(TargetGroupName, '${NAME_PREFIX}')].TargetGroupArn" --output text || echo "")
+          if [[ -n "$REMAINING_TGS" ]]; then
+            echo "⚠️ Warning: Found remaining target groups: $REMAINING_TGS"
+          else
+            echo "✅ No remaining target groups found with name starting with ${NAME_PREFIX}"
+          fi
+          
+          # Check for remaining IAM roles
+          REMAINING_ROLES=$(aws iam list-roles --query "Roles[?starts_with(RoleName, '${NAME_PREFIX}')].RoleName" --output text || echo "")
+          if [[ -n "$REMAINING_ROLES" ]]; then
+            echo "⚠️ Warning: Found remaining IAM roles: $REMAINING_ROLES"
+          else
+            echo "✅ No remaining IAM roles found with name starting with ${NAME_PREFIX}"
+          fi
+          
+          # Check for remaining IAM policies
+          REMAINING_POLICIES=$(aws iam list-policies --scope Local --query "Policies[?starts_with(PolicyName, '${NAME_PREFIX}')].PolicyName" --output text || echo "")
+          if [[ -n "$REMAINING_POLICIES" ]]; then
+            echo "⚠️ Warning: Found remaining IAM policies: $REMAINING_POLICIES"
+          else
+            echo "✅ No remaining IAM policies found with name starting with ${NAME_PREFIX}"
+          fi
+          
+          echo "\n🧹 Cleanup process completed. Check warnings above if any resources remain."
