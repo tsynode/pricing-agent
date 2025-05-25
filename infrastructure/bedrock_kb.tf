@@ -3,45 +3,46 @@
 # Stage 1: Deploy core infrastructure with placeholder in SSM Parameter Store
 # Stage 2: Create and configure Bedrock knowledge base separately
 
-# Commented out for initial deployment - will be created manually or in second stage
-/*
-resource "aws_bedrock_knowledge_base" "pricing_kb" {
-  name        = "${local.name_prefix}-kb"
-  description = "Knowledge base for pricing policies"
+# The following resources are commented out for initial deployment
+# They will be created manually or in the second stage
 
-  storage_configuration {
-    type = "OPENSEARCH_SERVERLESS"
-    opensearch_serverless_configuration {
-      collection_arn = aws_opensearchserverless_collection.kb_collection.arn
-      vector_index_name = "bedrock-knowledge-base-default-index"
-      field_mapping {
-        text_field = "AMAZON_BEDROCK_TEXT_CHUNK"
-        metadata_field = "AMAZON_BEDROCK_METADATA"
-        vector_field = "bedrock-knowledge-base-default-vector"
-      }
-    }
-  }
-
-  knowledge_base_configuration {
-    type = "VECTOR"
-    vector_knowledge_base_configuration {
-      embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/amazon.titan-embed-text-v2:0"
-    }
-  }
-
-  # Create IAM role for the knowledge base
-  role_arn = aws_iam_role.kb_role.arn
-
-  # Prevent conflicts with existing knowledge base
-  lifecycle {
-    ignore_changes = [
-      storage_configuration,
-      knowledge_base_configuration
-    ]
-  }
-
-  tags = local.common_tags
-}
+# resource "aws_bedrock_knowledge_base" "pricing_kb" {
+#   name        = "${local.name_prefix}-kb"
+#   description = "Knowledge base for pricing policies"
+#
+#   storage_configuration {
+#     type = "OPENSEARCH_SERVERLESS"
+#     opensearch_serverless_configuration {
+#       collection_arn = aws_opensearchserverless_collection.kb_collection.arn
+#       vector_index_name = "bedrock-knowledge-base-default-index"
+#       field_mapping {
+#         text_field = "AMAZON_BEDROCK_TEXT_CHUNK"
+#         metadata_field = "AMAZON_BEDROCK_METADATA"
+#         vector_field = "bedrock-knowledge-base-default-vector"
+#       }
+#     }
+#   }
+#
+#   knowledge_base_configuration {
+#     type = "VECTOR"
+#     vector_knowledge_base_configuration {
+#       embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/amazon.titan-embed-text-v2:0"
+#     }
+#   }
+#
+#   # Create IAM role for the knowledge base
+#   role_arn = aws_iam_role.kb_role.arn
+#
+#   # Prevent conflicts with existing knowledge base
+#   lifecycle {
+#     ignore_changes = [
+#       storage_configuration,
+#       knowledge_base_configuration
+#     ]
+#   }
+#
+#   tags = local.common_tags
+# }
 
 # Create OpenSearch Serverless Collection for the knowledge base
 resource "aws_opensearchserverless_collection" "kb_collection" {
@@ -229,27 +230,26 @@ resource "aws_iam_role_policy_attachment" "kb_foundation_model" {
 }
 
 # Create data source for the knowledge base - commented out for initial deployment
-/*
-resource "aws_bedrock_knowledge_base_data_source" "policy_data_source" {
-  knowledge_base_id = aws_bedrock_knowledge_base.pricing_kb.id
-  name              = "pricing-policies"
-  
-  data_source_configuration {
-    type = "S3"
-    s3_configuration {
-      bucket_arn = aws_s3_bucket.policy.arn
-      # Use an inclusion prefix that matches all files
-      inclusion_prefixes = [""]
-    }
-  }
-  
-  # Prevent conflicts with existing data source
-  lifecycle {
-    ignore_changes = [
-      data_source_configuration
-    ]
-  }
-}
+# resource "aws_bedrock_knowledge_base_data_source" "policy_data_source" {
+#   knowledge_base_id = aws_bedrock_knowledge_base.pricing_kb.id
+#   name              = "pricing-policies"
+#   
+#   data_source_configuration {
+#     type = "S3"
+#     s3_configuration {
+#       bucket_arn = aws_s3_bucket.policy.arn
+#       # Use an inclusion prefix that matches all files
+#       inclusion_prefixes = [""]
+#     }
+#   }
+#   
+#   # Prevent conflicts with existing data source
+#   lifecycle {
+#     ignore_changes = [
+#       data_source_configuration
+#     ]
+#   }
+# }
 
 # Create a placeholder SSM parameter for the knowledge base ID
 # This will be updated manually or in the second stage
