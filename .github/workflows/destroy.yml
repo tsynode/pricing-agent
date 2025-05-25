@@ -48,7 +48,7 @@ jobs:
           # Print the bucket name for debugging
           echo "Using S3 bucket: $BUCKET_NAME"
       
-      - name: Terraform Init and Workspace Setup
+      - name: Terraform Init with Legacy State Path
         working-directory: ./infrastructure
         run: |
           # Print environment variables for debugging
@@ -56,18 +56,46 @@ jobs:
           echo "Using AWS region: ${{ secrets.AWS_REGION }}"
           echo "Using environment: ${ENVIRONMENT}"
           
-          # Initialize Terraform with S3 backend
+          # First, initialize with the old state path to access existing resources
+          echo "\n🔄 Initializing with legacy state path to access existing resources...\n"
           terraform init \
             -backend-config="bucket=$TF_BUCKET_NAME" \
-            -backend-config="key=terraform.tfstate" \
+            -backend-config="key=terraform/${ENVIRONMENT}/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}" \
             -backend-config="encrypt=true"
-            
-          # Select or create workspace based on environment
-          terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
           
-          # Verify the workspace
-          echo "Active Terraform workspace: $(terraform workspace show)"
+          # Check if there are any resources in the old state
+          RESOURCE_COUNT=$(terraform state list | wc -l)
+          
+          if [ "$RESOURCE_COUNT" -gt 0 ]; then
+            echo "\n✅ Found $RESOURCE_COUNT resources in the legacy state path.\n"
+            echo "Proceeding with destroy using the legacy state path."
+          else
+            echo "\n⚠️ No resources found in the legacy state path.\n"
+            
+            # Try initializing with the new workspace approach
+            echo "\n🔄 Trying new workspace approach...\n"
+            terraform init -reconfigure \
+              -backend-config="bucket=$TF_BUCKET_NAME" \
+              -backend-config="key=terraform.tfstate" \
+              -backend-config="region=${{ secrets.AWS_REGION }}" \
+              -backend-config="encrypt=true"
+              
+            # Select or create workspace based on environment
+            terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
+            
+            # Verify the workspace
+            echo "Active Terraform workspace: $(terraform workspace show)"
+            
+            # Check if there are any resources in the workspace state
+            WORKSPACE_RESOURCE_COUNT=$(terraform state list | wc -l)
+            
+            if [ "$WORKSPACE_RESOURCE_COUNT" -gt 0 ]; then
+              echo "\n✅ Found $WORKSPACE_RESOURCE_COUNT resources in the workspace state.\n"
+            else
+              echo "\n⚠️ No resources found in either state location. Nothing to destroy.\n"
+            fi
+          fi
       
 
       
@@ -76,14 +104,27 @@ jobs:
         run: |
           echo "\n🗑️ Destroying all resources...\n"
           
-          # Ensure we're in the correct workspace
-          terraform workspace select ${ENVIRONMENT}
-          
-          # Verify the workspace before destroying
-          echo "Active Terraform workspace: $(terraform workspace show)"
-          echo "Destroying resources in workspace: ${ENVIRONMENT}"
+          # Check if we're using the legacy state path or workspace
+          if terraform state list | grep -q "aws_vpc.main"; then
+            echo "Using current state configuration for destroy"
+          else
+            # If no resources found, we might need to reinitialize with the legacy state path
+            echo "\n🔄 No resources found in current state, checking legacy state path...\n"
+            
+            terraform init -reconfigure \
+              -backend-config="bucket=$TF_BUCKET_NAME" \
+              -backend-config="key=terraform/${ENVIRONMENT}/terraform.tfstate" \
+              -backend-config="region=${{ secrets.AWS_REGION }}" \
+              -backend-config="encrypt=true"
+              
+            if ! terraform state list | grep -q "aws_vpc.main"; then
+              echo "\n⚠️ No resources found in either state location. Nothing to destroy.\n"
+              exit 0
+            fi
+          fi
           
           # Destroy all resources
+          echo "\n💥 Executing terraform destroy...\n"
           terraform destroy -auto-approve
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
