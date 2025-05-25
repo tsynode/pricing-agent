@@ -97,9 +97,15 @@ else
           # First check if the association exists in AWS
           ASSOC_ID=$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$SUBNET_ID" --query "RouteTables[0].Associations[?SubnetId=='$SUBNET_ID'].RouteTableAssociationId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
           if [[ "$ASSOC_ID" != "NOT_FOUND" && "$ASSOC_ID" != "None" && -n "$ASSOC_ID" ]]; then
-            echo "Found association ID: $ASSOC_ID"
-            terraform state rm "aws_route_table_association.public[$INDEX]" 2>/dev/null || true
-            terraform import "aws_route_table_association.public[$INDEX]" "$SUBNET_ID/$PUBLIC_RT"
+            # Verify the route table ID matches what we expect
+            RT_ID=$(aws ec2 describe-route-tables --filters "Name=association.route-table-association-id,Values=$ASSOC_ID" --query "RouteTables[0].RouteTableId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
+            if [[ "$RT_ID" == "$PUBLIC_RT" ]]; then
+              echo "Found association ID: $ASSOC_ID between subnet $SUBNET_ID and route table $PUBLIC_RT"
+              terraform state rm "aws_route_table_association.public[$INDEX]" 2>/dev/null || true
+              terraform import "aws_route_table_association.public[$INDEX]" "$SUBNET_ID/$PUBLIC_RT"
+            else
+              echo "⚠️ Subnet $SUBNET_ID is associated with route table $RT_ID, not $PUBLIC_RT. Skipping import."
+            fi
           else
             echo "⚠️ No association found for subnet $SUBNET_ID, skipping import"
           fi
@@ -128,9 +134,15 @@ else
           # First check if the association exists in AWS
           ASSOC_ID=$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$SUBNET_ID" --query "RouteTables[0].Associations[?SubnetId=='$SUBNET_ID'].RouteTableAssociationId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
           if [[ "$ASSOC_ID" != "NOT_FOUND" && "$ASSOC_ID" != "None" && -n "$ASSOC_ID" ]]; then
-            echo "Found association ID: $ASSOC_ID"
-            terraform state rm "aws_route_table_association.private[$INDEX]" 2>/dev/null || true
-            terraform import "aws_route_table_association.private[$INDEX]" "$SUBNET_ID/$PRIVATE_RT"
+            # Verify the route table ID matches what we expect
+            RT_ID=$(aws ec2 describe-route-tables --filters "Name=association.route-table-association-id,Values=$ASSOC_ID" --query "RouteTables[0].RouteTableId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
+            if [[ "$RT_ID" == "$PRIVATE_RT" ]]; then
+              echo "Found association ID: $ASSOC_ID between subnet $SUBNET_ID and route table $PRIVATE_RT"
+              terraform state rm "aws_route_table_association.private[$INDEX]" 2>/dev/null || true
+              terraform import "aws_route_table_association.private[$INDEX]" "$SUBNET_ID/$PRIVATE_RT"
+            else
+              echo "⚠️ Subnet $SUBNET_ID is associated with route table $RT_ID, not $PRIVATE_RT. Skipping import."
+            fi
           else
             echo "⚠️ No association found for subnet $SUBNET_ID, skipping import"
           fi

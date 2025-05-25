@@ -216,10 +216,25 @@ jobs:
             -target=aws_route_table.public \
             -target=aws_route_table.private
             
-          # Apply route table associations separately with error handling
-          echo "\n🔗 Applying route table associations...\n"
-          terraform apply -auto-approve -target=aws_route_table_association.public || echo "⚠️ Some public route table associations may have failed, but continuing"
-          terraform apply -auto-approve -target=aws_route_table_association.private || echo "⚠️ Some private route table associations may have failed, but continuing"
+          # Check if we have any route table associations in the state
+          echo "\n🔗 Checking for route table associations...\n"
+          PUBLIC_ASSOC_COUNT=$(terraform state list | grep aws_route_table_association.public | wc -l || echo "0")
+          PRIVATE_ASSOC_COUNT=$(terraform state list | grep aws_route_table_association.private | wc -l || echo "0")
+          
+          # Only apply route table associations if they exist in the state
+          if [[ "$PUBLIC_ASSOC_COUNT" -gt 0 ]]; then
+            echo "Found $PUBLIC_ASSOC_COUNT public route table associations in state, applying..."
+            terraform apply -auto-approve -target=aws_route_table_association.public || echo "⚠️ Some public route table associations may have failed, but continuing"
+          else
+            echo "No public route table associations found in state, skipping"
+          fi
+          
+          if [[ "$PRIVATE_ASSOC_COUNT" -gt 0 ]]; then
+            echo "Found $PRIVATE_ASSOC_COUNT private route table associations in state, applying..."
+            terraform apply -auto-approve -target=aws_route_table_association.private || echo "⚠️ Some private route table associations may have failed, but continuing"
+          else
+            echo "No private route table associations found in state, skipping"
+          fi
           
           # Apply NAT gateway last
           echo "\n🔊 Applying NAT gateway...\n"
