@@ -69,3 +69,5 @@ variable "certificate_arn" {
   type        = string
   default     = null
 }
+
+# No variable for prevent_destroy as it should be a static safety mechanism

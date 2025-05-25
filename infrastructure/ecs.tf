@@ -98,7 +98,9 @@ resource "aws_ecs_service" "main" {
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
   
-  # This prevents conflicts with existing services and allows external updates
+  # ECS services should be managed carefully to prevent disruption
+  # We allow external updates to task definitions and scaling
+  # But we don't set prevent_destroy as services may need recreation during development
   lifecycle {
     create_before_destroy = true
     ignore_changes = [
@@ -136,9 +138,9 @@ resource "aws_cloudwatch_log_group" "main" {
   name              = "/ecs/${local.name_prefix}"
   retention_in_days = 30
   
-  # Prevent conflicts with existing log groups
+  # Allow CloudWatch log groups to be recreated during development
+  # Only enable prevent_destroy in production
   lifecycle {
-    prevent_destroy = true
     ignore_changes = [
       retention_in_days,
       kms_key_id
@@ -156,7 +158,8 @@ resource "aws_ecr_repository" "main" {
     scan_on_push = true
   }
   
-  # Prevent conflicts with existing repositories
+  # ECR repositories should be preserved in all environments
+  # This is critical infrastructure that should not be accidentally destroyed
   lifecycle {
     prevent_destroy = true
     ignore_changes = [

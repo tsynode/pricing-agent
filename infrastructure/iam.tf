@@ -17,7 +17,8 @@ resource "aws_iam_role" "ecs_execution" {
     ]
   })
   
-  # Prevent conflicts with existing roles
+  # IAM roles are critical infrastructure that should not be accidentally destroyed
+  # These should be preserved across deployments
   lifecycle {
     prevent_destroy = true
     ignore_changes = [
@@ -51,7 +52,8 @@ resource "aws_iam_role" "ecs_task" {
     ]
   })
   
-  # Prevent conflicts with existing roles
+  # IAM roles are critical infrastructure that should not be accidentally destroyed
+  # These should be preserved across deployments
   lifecycle {
     prevent_destroy = true
     ignore_changes = [
@@ -68,7 +70,8 @@ resource "aws_iam_policy" "ecs_task_policy" {
   name        = "${local.name_prefix}-ecs-task-policy"
   description = "Policy for ECS task role"
   
-  # Prevent conflicts with existing policies
+  # IAM policies are critical infrastructure that should not be accidentally destroyed
+  # These should be preserved across deployments
   lifecycle {
     prevent_destroy = true
     ignore_changes = [
