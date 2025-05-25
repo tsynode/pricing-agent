@@ -63,15 +63,27 @@ jobs:
             -backend-config="region=${{ secrets.AWS_REGION }}" \
             -backend-config="encrypt=true"
             
-          # Select workspace based on environment
-          terraform workspace select ${ENVIRONMENT} || echo "Workspace ${ENVIRONMENT} not found, nothing to destroy"
+          # Select or create workspace based on environment
+          terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
+          
+          # Verify the workspace
+          echo "Active Terraform workspace: $(terraform workspace show)"
       
 
       
       - name: Terraform Destroy
         working-directory: ./infrastructure
         run: |
-          echo "Destroying all resources..."
+          echo "\n🗑️ Destroying all resources...\n"
+          
+          # Ensure we're in the correct workspace
+          terraform workspace select ${ENVIRONMENT}
+          
+          # Verify the workspace before destroying
+          echo "Active Terraform workspace: $(terraform workspace show)"
+          echo "Destroying resources in workspace: ${ENVIRONMENT}"
+          
+          # Destroy all resources
           terraform destroy -auto-approve
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
