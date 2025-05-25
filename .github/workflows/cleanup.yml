@@ -15,6 +15,7 @@ on:
 
 env:
   ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}  # Use input or default to staging
+  PROJECT: 'pricing-agent'
 
 jobs:
   cleanup:
@@ -32,9 +33,60 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
       
-      - name: Run cleanup script
+      - name: Set environment variables
         run: |
-          echo "Running cleanup script for environment: $ENVIRONMENT"
+          echo "NAME_PREFIX=${PROJECT}-${ENVIRONMENT}" >> $GITHUB_ENV
+      
+      - name: Clean up ALB resources
+        run: |
+          echo "🧹 Cleaning up ALB resources for ${NAME_PREFIX}..."
+          
+          # Find and delete target group
+          echo "Finding target groups with name ${NAME_PREFIX}-tg..."
+          TARGET_GROUPS=$(aws elbv2 describe-target-groups --query "TargetGroups[?starts_with(TargetGroupName, '${NAME_PREFIX}-tg')].TargetGroupArn" --output text)
+          
+          if [[ -n "$TARGET_GROUPS" ]]; then
+            for tg in $TARGET_GROUPS; do
+              echo "Deleting target group $tg"
+              aws elbv2 delete-target-group --target-group-arn "$tg" || echo "Failed to delete target group"
+            done
+          else
+            echo "No target groups found with name ${NAME_PREFIX}-tg"
+          fi
+          
+          # Find and delete ALB
+          echo "Finding ALB with name ${NAME_PREFIX}-alb..."
+          ALB_ARN=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName, '${NAME_PREFIX}-alb')].LoadBalancerArn" --output text)
+          
+          if [[ -n "$ALB_ARN" && "$ALB_ARN" != "None" ]]; then
+            # Get listeners
+            echo "Finding listeners for ALB $ALB_ARN..."
+            LISTENERS=$(aws elbv2 describe-listeners --load-balancer-arn "$ALB_ARN" --query "Listeners[].ListenerArn" --output text)
+            
+            # Delete listeners first
+            if [[ -n "$LISTENERS" ]]; then
+              for listener in $LISTENERS; do
+                echo "Deleting listener $listener"
+                aws elbv2 delete-listener --listener-arn "$listener" || echo "Failed to delete listener"
+              done
+            else
+              echo "No listeners found for ALB $ALB_ARN"
+            fi
+            
+            # Modify ALB to disable deletion protection
+            echo "Disabling deletion protection for ALB $ALB_ARN..."
+            aws elbv2 modify-load-balancer-attributes --load-balancer-arn "$ALB_ARN" --attributes Key=deletion_protection.enabled,Value=false || echo "Failed to disable deletion protection"
+            
+            # Delete the ALB
+            echo "Deleting ALB $ALB_ARN..."
+            aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" || echo "Failed to delete ALB"
+          else
+            echo "No ALB found with name ${NAME_PREFIX}-alb"
+          fi
+      
+      - name: Run general cleanup script
+        run: |
+          echo "Running general cleanup script for environment: $ENVIRONMENT"
           chmod +x ./scripts/cleanup_staging_resources.sh
           ./scripts/cleanup_staging_resources.sh
         env:
