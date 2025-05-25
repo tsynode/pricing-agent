@@ -91,12 +91,11 @@ else
       echo "Importing public route table associations..."
       INDEX=0
       for SUBNET_ID in $PUBLIC_SUBNETS; do
-        # Get the association ID
-        RT_ASSOC=$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$SUBNET_ID" --query "RouteTables[0].Associations[?SubnetId=='$SUBNET_ID'].RouteTableAssociationId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
-        if [[ "$RT_ASSOC" != "NOT_FOUND" && "$RT_ASSOC" != "None" ]]; then
-          echo "Importing public route table association for subnet $SUBNET_ID: $RT_ASSOC"
+        # For route table associations, we need to use the format 'subnet_id/route_table_id'
+        if [[ -n "$SUBNET_ID" && "$SUBNET_ID" != "None" && -n "$PUBLIC_RT" && "$PUBLIC_RT" != "None" ]]; then
+          echo "Importing public route table association for subnet $SUBNET_ID with route table $PUBLIC_RT"
           terraform state rm "aws_route_table_association.public[$INDEX]" 2>/dev/null || echo "No state to remove"
-          terraform import "aws_route_table_association.public[$INDEX]" $RT_ASSOC
+          terraform import "aws_route_table_association.public[$INDEX]" "$SUBNET_ID/$PUBLIC_RT"
         fi
         INDEX=$((INDEX+1))
       done
@@ -116,12 +115,11 @@ else
       # Get the private subnet ID for this AZ
       SUBNET_ID=$(echo "$PRIVATE_SUBNETS" | tr '\t' '\n' | sed -n "$((INDEX+1))p")
       if [[ -n "$SUBNET_ID" ]]; then
-        # Get the association ID
-        RT_ASSOC=$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$SUBNET_ID" --query "RouteTables[0].Associations[?SubnetId=='$SUBNET_ID'].RouteTableAssociationId" --output text --region $AWS_REGION 2>/dev/null || echo "NOT_FOUND")
-        if [[ "$RT_ASSOC" != "NOT_FOUND" && "$RT_ASSOC" != "None" ]]; then
-          echo "Importing private route table association for subnet $SUBNET_ID: $RT_ASSOC"
+        # For route table associations, we need to use the format 'subnet_id/route_table_id'
+        if [[ -n "$SUBNET_ID" && "$SUBNET_ID" != "None" && -n "$PRIVATE_RT" && "$PRIVATE_RT" != "None" ]]; then
+          echo "Importing private route table association for subnet $SUBNET_ID with route table $PRIVATE_RT"
           terraform state rm "aws_route_table_association.private[$INDEX]" 2>/dev/null || echo "No state to remove"
-          terraform import "aws_route_table_association.private[$INDEX]" $RT_ASSOC
+          terraform import "aws_route_table_association.private[$INDEX]" "$SUBNET_ID/$PRIVATE_RT"
         fi
       fi
     fi
