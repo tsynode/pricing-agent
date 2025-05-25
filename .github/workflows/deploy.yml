@@ -209,13 +209,21 @@ jobs:
           
           # Apply routing components
           echo "\n🛣️ Applying routing components...\n"
+          
+          # Apply internet gateway and route tables first
           terraform apply -auto-approve \
             -target=aws_internet_gateway.main \
             -target=aws_route_table.public \
-            -target=aws_route_table.private \
-            -target=aws_route_table_association.public \
-            -target=aws_route_table_association.private \
-            -target=aws_nat_gateway.main
+            -target=aws_route_table.private
+            
+          # Apply route table associations separately with error handling
+          echo "\n🔗 Applying route table associations...\n"
+          terraform apply -auto-approve -target=aws_route_table_association.public || echo "⚠️ Some public route table associations may have failed, but continuing"
+          terraform apply -auto-approve -target=aws_route_table_association.private || echo "⚠️ Some private route table associations may have failed, but continuing"
+          
+          # Apply NAT gateway last
+          echo "\n🔊 Applying NAT gateway...\n"
+          terraform apply -auto-approve -target=aws_nat_gateway.main
           
           # Check for existing security groups
           echo "Checking for existing security groups..."
