@@ -9,9 +9,8 @@ resource "aws_lb" "main" {
   
   enable_deletion_protection = false
   
-  # Prevent conflicts with existing load balancers
+  # Allow proper management of resources with workspaces
   lifecycle {
-    prevent_destroy = true
     ignore_changes = [
       # Only ignore these specific attributes, not the entire resource
       name,
@@ -54,9 +53,8 @@ resource "aws_lb_target_group" "main" {
     matcher             = "200,302"  # Streamlit may return redirects
   }
   
-  # Prevent conflicts with existing target groups
+  # Allow proper management of resources with workspaces
   lifecycle {
-    prevent_destroy = true
     ignore_changes = [
       # Only ignore these specific attributes, not the entire resource
       name,
@@ -104,9 +102,8 @@ resource "aws_lb_listener" "http" {
     }
   }
   
-  # Prevent conflicts with existing listeners
+  # Allow proper management of resources with workspaces
   lifecycle {
-    prevent_destroy = true
     ignore_changes = [
       # Only ignore the default_action, not the entire resource
       default_action
@@ -135,9 +132,8 @@ resource "aws_lb_listener" "https" {
     target_group_arn = aws_lb_target_group.main.arn
   }
   
-  # Prevent conflicts with existing listeners
+  # Allow proper management of resources with workspaces
   lifecycle {
-    prevent_destroy = true
     ignore_changes = [
       # Only ignore the default_action, not the entire resource
       default_action
