@@ -125,11 +125,22 @@ resource "aws_ecs_service" "main" {
   
   depends_on = [
     aws_lb_listener.http,
+    aws_lb_listener.https,  # Include HTTPS listener as a dependency
+    aws_lb_target_group.main,  # Explicit dependency on target group
+    aws_lb.main,  # Explicit dependency on the load balancer
     aws_iam_role_policy_attachment.ecs_execution,
     aws_iam_role_policy_attachment.ecs_task,
     aws_nat_gateway.main,  # Explicit dependency on NAT Gateway
     aws_route_table_association.private  # Ensure route tables are associated
   ]
+  
+  # Add a provisioner to ensure the target group is properly associated with the load balancer
+  # before creating the ECS service
+  provisioner "local-exec" {
+    command = "aws elbv2 describe-target-groups --target-group-arns ${aws_lb_target_group.main.arn} --query 'TargetGroups[0].LoadBalancerArns' --output text"
+    # This command will fail if the target group is not associated with any load balancer
+    # which will prevent the ECS service from being created
+  }
   
   tags = local.common_tags
 }

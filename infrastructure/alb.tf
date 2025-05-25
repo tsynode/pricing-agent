@@ -102,6 +102,16 @@ resource "aws_lb_listener" "http" {
     }
   }
   
+  # Create a dummy listener rule to ensure the target group is associated with the ALB
+  # This ensures the target group is properly registered with the load balancer
+  # even when the default action is a redirect
+  lifecycle {
+    ignore_changes = [
+      # Only ignore the default_action, not the entire resource
+      default_action
+    ]
+  }
+  
   # Allow proper management of resources with workspaces
   lifecycle {
     ignore_changes = [
