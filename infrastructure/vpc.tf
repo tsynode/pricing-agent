@@ -155,13 +155,9 @@ resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
   
-  # This prevents unnecessary recreation of route table associations
-  # while still allowing Terraform to manage them properly
+  # Standard lifecycle configuration for route table associations
   lifecycle {
     create_before_destroy = true
-    # Only ignore changes to the route_table_id to prevent conflicts
-    # with existing associations while still allowing subnet_id to be managed
-    ignore_changes = [route_table_id]
   }
 }
 
@@ -172,13 +168,9 @@ resource "aws_route_table_association" "private" {
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
   
-  # This prevents unnecessary recreation of route table associations
-  # while still allowing Terraform to manage them properly
+  # Standard lifecycle configuration for route table associations
   lifecycle {
     create_before_destroy = true
-    # Only ignore changes to the route_table_id to prevent conflicts
-    # with existing associations while still allowing subnet_id to be managed
-    ignore_changes = [route_table_id]
   }
   
   # Explicit dependency on private subnets and route tables

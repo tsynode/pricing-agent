@@ -98,19 +98,26 @@ jobs:
           # Print the bucket name for debugging
           echo "Using S3 bucket: $BUCKET_NAME"
       
-      - name: Terraform Init
+      - name: Terraform Init and Workspace Setup
         working-directory: ./infrastructure
         run: |
           # Print environment variables for debugging
           echo "Using S3 bucket: $TF_BUCKET_NAME"
           echo "Using AWS region: ${{ secrets.AWS_REGION }}"
+          echo "Using environment: ${ENVIRONMENT}"
           
-          # Initialize with S3 backend
+          # Initialize Terraform with S3 backend
           terraform init \
             -backend-config="bucket=$TF_BUCKET_NAME" \
-            -backend-config="key=pricing-agent-${{ env.ENVIRONMENT }}/terraform.tfstate" \
+            -backend-config="key=terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}" \
             -backend-config="encrypt=true"
+            
+          # Select or create workspace based on environment
+          terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
+          
+          # Verify the workspace
+          echo "Active Terraform workspace: $(terraform workspace show)"
       
       - name: Terraform Validate
         working-directory: ./infrastructure
@@ -178,14 +185,25 @@ jobs:
         run: |
           echo "\n📝️ Deploying infrastructure...\n"
           
-          # Initialize Terraform
-          terraform init
+          # Initialize Terraform and select the appropriate workspace
+          terraform init \
+            -backend-config="bucket=$TF_BUCKET_NAME" \
+            -backend-config="key=terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+            
+          # Ensure we're in the correct workspace
+          terraform workspace select ${ENVIRONMENT}
           
-          # Run the import script to properly import existing resources
-          echo "\n🔍 Importing existing resources...\n"
-          cd ..
-          ENVIRONMENT=${ENVIRONMENT} AWS_REGION=${AWS_REGION} ./scripts/import_existing_resources.sh
-          cd infrastructure
+          # Check current state
+          echo "\n🔍 Checking current Terraform state...\n"
+          terraform state list || echo "No resources in state yet"
+          
+          # For a fresh environment deployment, we'll start with a clean state
+          if [[ "$ENVIRONMENT" == "staging" || "$ENVIRONMENT" == "prod" ]]; then
+            echo "\n🧹 Using workspace: ${ENVIRONMENT}\n"
+            echo "Each workspace has its own isolated state file"
+          fi
           
           # Apply core infrastructure first
           echo "\n🧱 Applying core infrastructure...\n"
