@@ -198,14 +198,34 @@ jobs:
             terraform import aws_dynamodb_table.pricing pricing-agent-${ENVIRONMENT}-pricing-rules || echo "Import failed, but continuing"
           fi
           
-          echo "Applying DynamoDB tables..."
-          terraform apply -auto-approve -target=aws_dynamodb_table.inventory -target=aws_dynamodb_table.pricing || echo "Tables already exist, continuing with other resources"
+          # Check if S3 policy bucket exists
+          echo "Checking for existing S3 buckets..."
+          POLICY_BUCKET_EXISTS=$(aws s3api head-bucket --bucket pricing-agent-${ENVIRONMENT}-policies 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$POLICY_BUCKET_EXISTS" != "NOT_FOUND" ]]; then
+            echo "Importing existing policy bucket..."
+            terraform import aws_s3_bucket.policy pricing-agent-${ENVIRONMENT}-policies || echo "Import failed, but continuing"
+          fi
           
-          # Apply S3 buckets - our lifecycle blocks will handle existing resources
-          echo "Applying S3 buckets and configurations..."
+          # Check if S3 session bucket exists
+          SESSION_BUCKET_EXISTS=$(aws s3api head-bucket --bucket pricing-agent-${ENVIRONMENT}-sessions 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$SESSION_BUCKET_EXISTS" != "NOT_FOUND" ]]; then
+            echo "Importing existing session bucket..."
+            terraform import aws_s3_bucket.session pricing-agent-${ENVIRONMENT}-sessions || echo "Import failed, but continuing"
+          fi
+          
+          echo "Applying DynamoDB tables..."
+          terraform apply -auto-approve \
+            -target=aws_dynamodb_table.inventory \
+            -target=aws_dynamodb_table.pricing || echo "DynamoDB tables already exist, continuing with S3 buckets"
+          
+          echo "Applying S3 buckets..."
           terraform apply -auto-approve \
             -target=aws_s3_bucket.policy \
-            -target=aws_s3_bucket.session \
+            -target=aws_s3_bucket.session || echo "S3 buckets already exist, continuing with configurations"
+          
+          # Apply S3 bucket configurations
+          echo "Applying S3 bucket configurations..."
+          terraform apply -auto-approve \
             -target=aws_s3_bucket_versioning.policy_versioning \
             -target=aws_s3_bucket_versioning.session_versioning \
             -target=aws_s3_bucket_server_side_encryption_configuration.policy_encryption \
@@ -247,12 +267,53 @@ jobs:
           # Apply networking components (VPC, subnets, security groups, ALB)
           echo "\n🌐 Applying networking components...\n"
           
+          # Check for existing VPC
+          echo "Checking for existing VPC..."
+          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$VPC_ID" != "NOT_FOUND" && "$VPC_ID" != "None" ]]; then
+            echo "Importing existing VPC: $VPC_ID"
+            terraform import aws_vpc.main $VPC_ID || echo "Import failed, but continuing"
+            
+            # Get subnet information for the VPC
+            echo "Looking for subnets in VPC $VPC_ID"
+            PUBLIC_SUBNETS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-public-*" --query "Subnets[*].SubnetId" --output text)
+            PRIVATE_SUBNETS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-private-*" --query "Subnets[*].SubnetId" --output text)
+            
+            # Import public subnets
+            if [[ -n "$PUBLIC_SUBNETS" && "$PUBLIC_SUBNETS" != "None" ]]; then
+              echo "Importing public subnets: $PUBLIC_SUBNETS"
+              INDEX=0
+              for SUBNET_ID in $PUBLIC_SUBNETS; do
+                terraform import "aws_subnet.public[$INDEX]" $SUBNET_ID || echo "Import failed, but continuing"
+                INDEX=$((INDEX+1))
+              done
+            fi
+            
+            # Import private subnets
+            if [[ -n "$PRIVATE_SUBNETS" && "$PRIVATE_SUBNETS" != "None" ]]; then
+              echo "Importing private subnets: $PRIVATE_SUBNETS"
+              INDEX=0
+              for SUBNET_ID in $PRIVATE_SUBNETS; do
+                terraform import "aws_subnet.private[$INDEX]" $SUBNET_ID || echo "Import failed, but continuing"
+                INDEX=$((INDEX+1))
+              done
+            fi
+          fi
+          
           # Apply VPC and subnets
           echo "Applying VPC and subnets..."
           terraform apply -auto-approve \
             -target=aws_vpc.main \
             -target=aws_subnet.public \
             -target=aws_subnet.private
+          
+          # Check for existing routing components
+          echo "Checking for existing routing components..."
+          IGW_ID=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$VPC_ID" --query "InternetGateways[0].InternetGatewayId" --output text 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$IGW_ID" != "NOT_FOUND" && "$IGW_ID" != "None" ]]; then
+            echo "Importing existing Internet Gateway: $IGW_ID"
+            terraform import aws_internet_gateway.main $IGW_ID || echo "Import failed, but continuing"
+          fi
           
           # Apply routing components
           echo "Applying routing components..."
@@ -263,6 +324,20 @@ jobs:
             -target=aws_route_table_association.public \
             -target=aws_route_table_association.private \
             -target=aws_nat_gateway.main
+          
+          # Check for existing security groups
+          echo "Checking for existing security groups..."
+          ALB_SG=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=pricing-agent-${ENVIRONMENT}-alb-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$ALB_SG" != "NOT_FOUND" && "$ALB_SG" != "None" ]]; then
+            echo "Importing existing ALB security group: $ALB_SG"
+            terraform import aws_security_group.alb $ALB_SG || echo "Import failed, but continuing"
+          fi
+          
+          ECS_SG=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=pricing-agent-${ENVIRONMENT}-ecs-sg" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "NOT_FOUND")
+          if [[ "$ECS_SG" != "NOT_FOUND" && "$ECS_SG" != "None" ]]; then
+            echo "Importing existing ECS security group: $ECS_SG"
+            terraform import aws_security_group.ecs $ECS_SG || echo "Import failed, but continuing"
+          fi
           
           # Apply security groups
           echo "Applying security groups..."
