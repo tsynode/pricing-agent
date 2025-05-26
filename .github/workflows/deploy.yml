@@ -522,14 +522,15 @@ jobs:
             }
           fi
           
+          # Set Terraform variables
+          export TF_VAR_environment="$ENVIRONMENT"
+          export TF_VAR_project_name="pricing-agent"
+          export TF_VAR_model_id="$MODEL"
+          export TF_VAR_domain_name="$DOMAIN_NAME"
+          export TF_VAR_enable_https="$ENABLE_HTTPS"
+          export TF_VAR_inference_profile_arn="$INFERENCE_PROFILE_ARN"
+          
           echo "\n✅ Infrastructure deployment complete!\n"
-        env:
-          TF_VAR_environment: ${{ env.ENVIRONMENT }}
-          TF_VAR_project_name: pricing-agent
-          TF_VAR_model_id: ${{ env.MODEL }}
-          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
-          TF_VAR_enable_https: ${{ env.ENABLE_HTTPS }}
-          TF_VAR_inference_profile_arn: ${{ env.INFERENCE_PROFILE_ARN }}
       - name: Verify ECS Service Status
         # ECS Service creation has been consolidated into the previous step
         run: |
