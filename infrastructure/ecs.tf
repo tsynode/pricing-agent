@@ -77,7 +77,7 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "INFERENCE_PROFILE_ARN"
-          value = aws_bedrock_inference_profile.claude_opus.arn
+          value = var.inference_profile_arn != "" ? var.inference_profile_arn : "none"
         }
       ]
       
