@@ -44,10 +44,52 @@
 #   tags = local.common_tags
 # }
 
+# Create encryption policy for OpenSearch Serverless
+resource "aws_opensearchserverless_security_policy" "encryption_policy" {
+  name = "${local.name_prefix}-encryption-policy"
+  type = "encryption"
+  description = "Encryption policy for OpenSearch Serverless collection"
+  policy = jsonencode({
+    Rules = [
+      {
+        ResourceType = "collection"
+        Resource = [
+          "collection/${local.name_prefix}-kb-coll"
+        ]
+      }
+    ]
+    AWSOwnedKey = true
+  })
+}
+
+# Create network policy for OpenSearch Serverless
+resource "aws_opensearchserverless_security_policy" "network_policy" {
+  name = "${local.name_prefix}-network-policy"
+  type = "network"
+  description = "Network policy for OpenSearch Serverless collection"
+  policy = jsonencode({
+    Rules = [
+      {
+        ResourceType = "collection"
+        Resource = [
+          "collection/${local.name_prefix}-kb-coll"
+        ]
+      }
+    ]
+    AllowFromPublic = true
+  })
+}
+
 # Create OpenSearch Serverless Collection for the knowledge base
 resource "aws_opensearchserverless_collection" "kb_collection" {
   name = "${local.name_prefix}-kb-coll"
   type = "VECTORSEARCH"
+  
+  # Wait for security policies to be created first
+  depends_on = [
+    aws_opensearchserverless_security_policy.encryption_policy,
+    aws_opensearchserverless_security_policy.network_policy
+  ]
 
   # Prevent conflicts with existing collection
   lifecycle {
