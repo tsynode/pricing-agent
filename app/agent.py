@@ -69,16 +69,11 @@ def create_agent(session_id=None):
         print(f"Using provided inference profile ARN: {model_identifier}")
     # Otherwise, determine if we need an inference profile based on the model
     elif 'claude-opus-4' in model_id:
-        # Get account and region for constructing the ARN
-        region = os.environ.get('AWS_REGION', 'us-east-1')
-        account_id = boto3.client('sts').get_caller_identity().get('Account')
-        
-        # Format: arn:aws:bedrock:{region}:{account-id}:inference-profile/{profile-name}
-        # We'll create a default inference profile name based on the model and environment
-        env_prefix = os.environ.get('NAME_PREFIX', 'pricing-agent')
-        profile_name = f"{env_prefix}-{model_id.replace(':', '-')}"
-        model_identifier = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/{profile_name}"
-        print(f"Using inferred inference profile ARN: {model_identifier}")
+        # Use the system-defined inference profile for Claude Opus 4
+        # TODO: This is a hardcoded inference profile ARN which we'll need to later add to Terraform scripts
+        # and make configurable via environment variables instead of hardcoding
+        model_identifier = "arn:aws:bedrock:us-east-1:489997218859:inference-profile/us.anthropic.claude-opus-4-20250514-v1:0"
+        print(f"Using system-defined inference profile ARN for Claude Opus 4: {model_identifier}")
     else:
         # For other models, use the model ID directly
         model_identifier = model_id
