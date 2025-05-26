@@ -63,8 +63,8 @@ def create_agent(session_id=None):
     # Check if an inference profile ARN is provided in the environment
     inference_profile_arn = os.environ.get('INFERENCE_PROFILE_ARN')
     
-    # Use the provided inference profile ARN if available
-    if inference_profile_arn:
+    # Use the provided inference profile ARN if available and not set to "none"
+    if inference_profile_arn and inference_profile_arn.lower() != "none":
         model_identifier = inference_profile_arn
         print(f"Using provided inference profile ARN: {model_identifier}")
     # Otherwise, determine if we need an inference profile based on the model
