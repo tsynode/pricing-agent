@@ -129,19 +129,12 @@ jobs:
         run: |
           echo "Setting up Terraform..."
           
-          # Use the environment from the workflow input or determine based on branch
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.environment }}" ]]; then
-            # Use the environment specified in the workflow dispatch
-            echo "Using environment from workflow input: ${{ env.ENVIRONMENT }}"
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            # Override for main branch
-            ENVIRONMENT="prod"
-            echo "Using environment based on main branch: ${ENVIRONMENT}"
-          else
-            # Default for other branches
-            ENVIRONMENT="dev"
-            echo "Using default environment for branch: ${ENVIRONMENT}"
-          fi
+          # Use the environment variable that was set at the workflow level
+          ENVIRONMENT="${{ env.ENVIRONMENT }}"
+          echo "Using environment: ${ENVIRONMENT}"
+          
+          # Export the environment variable so it's available to all commands
+          export ENVIRONMENT
           
           # Initialize Terraform with S3 backend using workspace approach
           echo "\n🔍 STEP 1: Initializing Terraform with S3 backend...\n"
@@ -257,8 +250,18 @@ jobs:
             terraform import -allow-missing-config aws_dynamodb_table.tf_lock $TF_LOCK_TABLE || \
             echo "DynamoDB table does not exist yet, will be created"
           
-          # Apply Terraform configuration
-          echo "\n📝️ Applying Terraform configuration...\n"
+          # Check if ECR repository exists and import it if needed
+          echo "\n🔍 Checking for existing ECR repository...\n"
+          ECR_REPO_NAME="pricing-agent-${ENVIRONMENT}"
+          ECR_REPO_ARN=$(aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" --query "repositories[0].repositoryArn" --output text 2>/dev/null || echo "NOT_FOUND")
+          
+          if [[ "$ECR_REPO_ARN" != "NOT_FOUND" && "$ECR_REPO_ARN" != "None" ]]; then
+            echo "Importing existing ECR repository: $ECR_REPO_ARN"
+            terraform import aws_ecr_repository.main "$ECR_REPO_NAME" || echo "Import failed, but continuing"
+          fi
+          
+          # Apply Terraform changes
+          echo "\n🔧 Applying Terraform changes...\n"
           terraform apply -auto-approve
           
           # Get the ALB DNS name
