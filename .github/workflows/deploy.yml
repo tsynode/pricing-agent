@@ -562,9 +562,16 @@ jobs:
         run: |
           # Get ALB DNS from Terraform and save to a file to avoid obfuscation
           cd infrastructure
-          terraform output -json > tf_outputs.json
-          ALB_DNS=$(cat tf_outputs.json | jq -r '.alb_dns_name.value // "Not available"')
-          VPC_ID=$(cat tf_outputs.json | jq -r '.vpc_id.value // "Not available"')
+          # First check if terraform output is available
+          if terraform output &>/dev/null; then
+            # Try to get the outputs in a more robust way
+            ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || echo "Not available")
+            VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "Not available")
+          else
+            echo "⚠️ Terraform outputs not available, using direct AWS CLI queries"
+            ALB_DNS=$(aws elbv2 describe-load-balancers --names pricing-agent-${ENVIRONMENT}-alb --query "LoadBalancers[0].DNSName" --output text 2>/dev/null || echo "Not available")
+            VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT}-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "Not available")
+          fi
           
           # Create a clear deployment summary
           echo "\n=================================================================="
