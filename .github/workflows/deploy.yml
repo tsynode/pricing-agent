@@ -1,4 +1,4 @@
-name: Deploy Pricing Agent
+name: Deploy Pricing Agent Infrastructure
 
 on:
   push:
