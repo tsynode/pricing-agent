@@ -70,3 +70,8 @@ variable "certificate_arn" {
   default     = null
 }
 
+variable "inference_profile_arn" {
+  description = "ARN of the Bedrock inference profile for Claude 4 Opus models"
+  type        = string
+  default     = null
+}

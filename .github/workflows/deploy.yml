@@ -37,12 +37,17 @@ on:
         options:
           - 'true'
           - 'false'
+      inference_profile_arn:
+        description: 'ARN of the Bedrock inference profile (optional)'
+        required: false
+        type: string
 
 env:
   ENVIRONMENT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev' }}  # Use input or default to dev
   MODEL: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.model_id || 'anthropic.claude-opus-4-20250514-v1:0' }}  # Use input or default to Claude 4 Opus
   DOMAIN_NAME: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.domain_name || '' }}  # Domain name for HTTPS
   ENABLE_HTTPS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enable_https || 'true' }}  # Enable HTTPS
+  INFERENCE_PROFILE_ARN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.inference_profile_arn || '' }}  # Inference profile ARN
 
 jobs:
   deploy:
@@ -84,7 +89,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.5.0
+          terraform_version: 1.7.5
       
       - name: "Create S3 Bucket for Terraform State"
         run: |
@@ -170,6 +175,7 @@ jobs:
           TF_VAR_model_id: ${{ env.MODEL }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
           TF_VAR_enable_https: ${{ env.ENABLE_HTTPS }}
+          TF_VAR_inference_profile_arn: ${{ env.INFERENCE_PROFILE_ARN }}
       
       - name: Set ECR Repository URL
         id: set-ecr-repo
@@ -501,6 +507,7 @@ jobs:
           TF_VAR_model_id: ${{ env.MODEL }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
           TF_VAR_enable_https: ${{ env.ENABLE_HTTPS }}
+TF_VAR_inference_profile_arn: ${{ env.INFERENCE_PROFILE_ARN }}
       
       # ECS Service creation has been consolidated into the previous step
       - name: Verify ECS Service Status
