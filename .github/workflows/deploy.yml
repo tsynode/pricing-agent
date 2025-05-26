@@ -226,6 +226,17 @@ jobs:
           tags: ${{ steps.set-ecr-repo.outputs.ecr_repo_uri }}:latest
           no-cache: true
       
+      - name: Create OpenSearch Security Policy
+        run: |
+          ENVIRONMENT="${{ env.ENVIRONMENT }}"
+          echo "Creating OpenSearch security policy for $ENVIRONMENT environment..."
+          
+          # Create encryption policy for OpenSearch collection
+          aws opensearchserverless create-security-policy \
+            --name "pricing-agent-${ENVIRONMENT}-encryption-policy" \
+            --type encryption \
+            --policy '{"Rules":[{"ResourceType":"collection","Resource":["collection/pricing-agent-'"$ENVIRONMENT"'-kb-collection"]}],"AWSOwnedKey":true}' || echo "Policy may already exist, continuing"
+      
       - name: Apply Terraform Infrastructure
         working-directory: ./infrastructure
         env:
@@ -255,6 +266,37 @@ jobs:
           aws dynamodb describe-table --table-name $TF_LOCK_TABLE 2>/dev/null && \
             terraform import -allow-missing-config aws_dynamodb_table.tf_lock $TF_LOCK_TABLE || \
             echo "DynamoDB table does not exist yet, will be created"
+          
+          # Import S3 bucket for policies if it exists
+          echo "\n🔍 Checking for existing S3 policy bucket...\n"
+          S3_BUCKET_NAME="pricing-agent-${ENVIRONMENT}-policies"
+          aws s3api head-bucket --bucket "$S3_BUCKET_NAME" 2>/dev/null && {
+            echo "S3 bucket $S3_BUCKET_NAME exists, importing..."
+            terraform import -allow-missing-config aws_s3_bucket.policy "$S3_BUCKET_NAME" || echo "Import failed, but continuing"
+          } || echo "S3 bucket doesn't exist, will be created"
+          
+          # Import CloudWatch log group if it exists
+          echo "\n🔍 Checking for existing CloudWatch log group...\n"
+          LOG_GROUP_NAME="/ecs/pricing-agent-${ENVIRONMENT}"
+          aws logs describe-log-groups --log-group-name-prefix "$LOG_GROUP_NAME" --query "logGroups[?logGroupName=='$LOG_GROUP_NAME'].logGroupName" --output text | grep -q "$LOG_GROUP_NAME" && {
+            echo "Log group $LOG_GROUP_NAME exists, importing..."
+            terraform import -allow-missing-config aws_cloudwatch_log_group.main "$LOG_GROUP_NAME" || echo "Import failed, but continuing"
+          } || echo "Log group doesn't exist, will be created"
+          
+          # Import SSM parameters if they exist
+          echo "\n🔍 Checking for existing SSM parameters...\n"
+          KB_PARAM_NAME="/pricing-agent-${ENVIRONMENT}/knowledge-base-id"
+          SESSIONS_PARAM_NAME="/pricing-agent-${ENVIRONMENT}/sessions-table-name"
+          
+          aws ssm get-parameter --name "$KB_PARAM_NAME" 2>/dev/null && {
+            echo "SSM parameter $KB_PARAM_NAME exists, importing..."
+            terraform import -allow-missing-config aws_ssm_parameter.kb_id "$KB_PARAM_NAME" || echo "Import failed, but continuing"
+          } || echo "SSM parameter doesn't exist, will be created"
+          
+          aws ssm get-parameter --name "$SESSIONS_PARAM_NAME" 2>/dev/null && {
+            echo "SSM parameter $SESSIONS_PARAM_NAME exists, importing..."
+            terraform import -allow-missing-config aws_ssm_parameter.sessions_table_name "$SESSIONS_PARAM_NAME" || echo "Import failed, but continuing"
+          } || echo "SSM parameter doesn't exist, will be created"
           
           # Check if ECR repository exists and import it if needed
           echo "\n🔍 Checking for existing ECR repository...\n"
