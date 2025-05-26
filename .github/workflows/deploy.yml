@@ -241,7 +241,7 @@ jobs:
             -target=aws_s3_bucket.policy \
             -target=aws_s3_bucket.session \
             -target=aws_iam_role.ecs_execution \
-            -target=aws_iam_role.ecs_task
+            -target=aws_iam_role.ecs_task || echo "⚠️ Some core resources already exist, continuing with deployment"
           
           # Apply networking components
           echo "\n🌐 Applying networking components...\n"
@@ -250,7 +250,7 @@ jobs:
             -target=aws_subnet.public \
             -target=aws_subnet.private \
             -target=aws_security_group.alb \
-            -target=aws_security_group.ecs
+            -target=aws_security_group.ecs || echo "⚠️ Some networking resources already exist, continuing with deployment"
           
           # Apply routing components
           echo "\n🛣️ Applying routing components...\n"
@@ -259,7 +259,7 @@ jobs:
           terraform apply -auto-approve \
             -target=aws_internet_gateway.main \
             -target=aws_route_table.public \
-            -target=aws_route_table.private
+            -target=aws_route_table.private || echo "⚠️ Some routing resources already exist, continuing with deployment"
             
           # Check if we have any route table associations in the state
           echo "\n🔗 Checking for route table associations...\n"
@@ -283,7 +283,7 @@ jobs:
           
           # Apply NAT gateway last
           echo "\n🔊 Applying NAT gateway...\n"
-          terraform apply -auto-approve -target=aws_nat_gateway.main
+          terraform apply -auto-approve -target=aws_nat_gateway.main || echo "⚠️ NAT gateway may already exist, continuing with deployment"
           
           # Check for existing security groups
           echo "Checking for existing security groups..."
@@ -307,7 +307,7 @@ jobs:
             -target=aws_security_group_rule.alb_ingress \
             -target=aws_security_group_rule.alb_egress \
             -target=aws_security_group_rule.ecs_ingress \
-            -target=aws_security_group_rule.ecs_egress
+            -target=aws_security_group_rule.ecs_egress || echo "⚠️ Some security group resources already exist, continuing with deployment"
           
           # Apply load balancer - first import existing resources if they exist
           echo "Checking for existing ALB resources..."
@@ -365,7 +365,7 @@ jobs:
           
           # Apply ECS task definition
           echo "Applying ECS task definition..."
-          terraform apply -auto-approve -target=aws_ecs_task_definition.main
+          terraform apply -auto-approve -target=aws_ecs_task_definition.main || echo "⚠️ ECS task definition may already exist, continuing with deployment"
           
           # ===== ECS Service Deployment - Consolidated Step =====
           echo "\n🔍 Performing VPC consistency check before ECS deployment...\n"

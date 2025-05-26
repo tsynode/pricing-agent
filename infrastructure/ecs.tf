@@ -73,7 +73,7 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "MODEL_ID"
-          value = var.model_id
+          value = "anthropic.claude-3-7-sonnet-20250219-v1:0"
         },
         {
           name  = "INFERENCE_PROFILE_ARN"
