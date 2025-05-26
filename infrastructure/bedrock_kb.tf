@@ -46,7 +46,7 @@
 
 # Create OpenSearch Serverless Collection for the knowledge base
 resource "aws_opensearchserverless_collection" "kb_collection" {
-  name = "${local.name_prefix}-kb-collection"
+  name = "${local.name_prefix}-kb-coll"
   type = "VECTORSEARCH"
 
   # Prevent conflicts with existing collection
