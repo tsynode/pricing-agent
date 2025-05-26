@@ -129,14 +129,19 @@ jobs:
         run: |
           echo "Setting up Terraform..."
           
-          # Set the environment based on the GitHub branch
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          # Use the environment from the workflow input or determine based on branch
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.environment }}" ]]; then
+            # Use the environment specified in the workflow dispatch
+            echo "Using environment from workflow input: ${{ env.ENVIRONMENT }}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            # Override for main branch
             ENVIRONMENT="prod"
+            echo "Using environment based on main branch: ${ENVIRONMENT}"
           else
+            # Default for other branches
             ENVIRONMENT="dev"
+            echo "Using default environment for branch: ${ENVIRONMENT}"
           fi
-          
-          echo "Using environment: ${ENVIRONMENT}"
           
           # Initialize Terraform with S3 backend using workspace approach
           echo "\n🔍 STEP 1: Initializing Terraform with S3 backend...\n"
