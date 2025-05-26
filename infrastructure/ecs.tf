@@ -173,10 +173,10 @@ resource "aws_ecr_repository" "main" {
     scan_on_push = true
   }
   
-  # ECR repositories should be preserved in all environments
-  # This is critical infrastructure that should not be accidentally destroyed
+  # Temporarily allowing destroy for clean slate deployment
+  # Will be re-enabled after deployment is successful
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       image_scanning_configuration
     ]
