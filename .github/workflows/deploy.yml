@@ -43,11 +43,12 @@ on:
         type: string
 
 env:
-  ENVIRONMENT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev' }}  # Use input or default to dev
-  MODEL: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.model_id || 'anthropic.claude-opus-4-20250514-v1:0' }}  # Use input or default to Claude 4 Opus
-  DOMAIN_NAME: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.domain_name || '' }}  # Domain name for HTTPS
-  ENABLE_HTTPS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enable_https || 'true' }}  # Enable HTTPS
-  INFERENCE_PROFILE_ARN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.inference_profile_arn || '' }}  # Inference profile ARN
+  # Simplify environment variable handling to avoid any confusion
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+  MODEL: ${{ github.event.inputs.model_id || 'anthropic.claude-opus-4-20250514-v1:0' }}
+  DOMAIN_NAME: ${{ github.event.inputs.domain_name || '' }}
+  ENABLE_HTTPS: ${{ github.event.inputs.enable_https || 'true' }}
+  INFERENCE_PROFILE_ARN: ${{ github.event.inputs.inference_profile_arn || '' }}
 
 jobs:
   deploy:
@@ -132,9 +133,14 @@ jobs:
           # Use the environment variable that was set at the workflow level
           ENVIRONMENT="${{ env.ENVIRONMENT }}"
           echo "Using environment: ${ENVIRONMENT}"
+          echo "Environment variable from workflow: ${{ env.ENVIRONMENT }}"
           
           # Export the environment variable so it's available to all commands
           export ENVIRONMENT
+          
+          # Debug: Check all environment variables
+          echo "\n🔍 DEBUG: All environment variables:\n"
+          env | grep -E 'ENVIRONMENT|TF_VAR|MODEL'
           
           # Initialize Terraform with S3 backend using workspace approach
           echo "\n🔍 STEP 1: Initializing Terraform with S3 backend...\n"
