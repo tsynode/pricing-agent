@@ -1,4 +1,4 @@
-name: Cleanup AWS Resources
+name: Cleanup
 
 on:
   workflow_dispatch:  # Manual trigger only
@@ -12,16 +12,20 @@ on:
           - dev
           - staging
           - prod
-      force_vpc_cleanup:
-        description: 'Force complete VPC cleanup (handles dependencies)'
-        required: false
-        default: true
-        type: boolean
+      cleanup_method:
+        description: 'Cleanup method to use'
+        required: true
+        default: 'terraform'
+        type: choice
+        options:
+          - terraform  # Use Terraform to destroy resources (preferred)
+          - manual     # Use manual AWS CLI commands (fallback)
 
 env:
-  ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}  # Use input or default to staging
+  ENVIRONMENT: ${{ github.event.inputs.environment }}
   PROJECT: 'pricing-agent'
-  FORCE_VPC_CLEANUP: ${{ github.event.inputs.force_vpc_cleanup || 'true' }}
+  NAME_PREFIX: pricing-agent-${{ github.event.inputs.environment }}
+  CLEANUP_METHOD: ${{ github.event.inputs.cleanup_method }}
 
 jobs:
   cleanup:
@@ -41,151 +45,300 @@ jobs:
           
       - name: Verify AWS credentials
         run: |
-          echo "🔑 Verifying AWS credentials..."
-          
-          # Check if credentials are valid
           if ! aws sts get-caller-identity &>/dev/null; then
-            echo "::error::AWS credentials have expired. Please update the GitHub repository secrets with fresh credentials."
-            echo "\n⚠️ CLEANUP FAILED: AWS CREDENTIALS EXPIRED ⚠️\n"
-            echo "To fix this issue:"
-            echo "1. Generate new AWS credentials"
-            echo "2. Update the GitHub repository secrets:"
-            echo "   - AWS_ACCESS_KEY_ID"
-            echo "   - AWS_SECRET_ACCESS_KEY"
-            echo "   - AWS_SESSION_TOKEN"
-            echo "3. Run the cleanup workflow again"
+            echo "::error::AWS credentials have expired. Please update the GitHub repository secrets."
             exit 1
           else
-            IDENTITY=$(aws sts get-caller-identity --query 'Arn' --output text)
-            echo "✅ AWS credentials are valid: $IDENTITY"
+            echo "✅ AWS credentials are valid: $(aws sts get-caller-identity --query 'Arn' --output text)"
           fi
       
-      - name: Set environment variables
-        run: |
-          echo "NAME_PREFIX=${PROJECT}-${ENVIRONMENT}" >> $GITHUB_ENV
+      - name: Set up Terraform
+        if: ${{ env.CLEANUP_METHOD == 'terraform' }}
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
       
-      - name: Clean up ALB resources
+      - name: Get S3 Bucket for Terraform State
+        if: ${{ env.CLEANUP_METHOD == 'terraform' }}
         run: |
-          echo "🧹 Cleaning up ALB resources for ${NAME_PREFIX}..."
+          BUCKET_NAME="pricing-agent-tf-state-$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
+          echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
+          echo "Using S3 bucket: $BUCKET_NAME"
+      
+      - name: Try Terraform Destroy (Primary Method)
+        if: ${{ env.CLEANUP_METHOD == 'terraform' }}
+        id: terraform_destroy
+        working-directory: ./infrastructure
+        continue-on-error: true
+        run: |
+          echo "🔄 Attempting Terraform destroy..."
           
-          # Find and delete target group
-          echo "Finding target groups with name ${NAME_PREFIX}-tg..."
-          TARGET_GROUPS=$(aws elbv2 describe-target-groups --query "TargetGroups[?starts_with(TargetGroupName, '${NAME_PREFIX}-tg')].TargetGroupArn" --output text)
-          
-          if [[ -n "$TARGET_GROUPS" ]]; then
-            for tg in $TARGET_GROUPS; do
-              echo "Deleting target group $tg"
-              aws elbv2 delete-target-group --target-group-arn "$tg" || echo "Failed to delete target group"
-            done
-          else
-            echo "No target groups found with name ${NAME_PREFIX}-tg"
-          fi
-          
-          # Find and delete ALB
-          echo "Finding ALB with name ${NAME_PREFIX}-alb..."
-          ALB_ARN=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName, '${NAME_PREFIX}-alb')].LoadBalancerArn" --output text)
-          
-          if [[ -n "$ALB_ARN" && "$ALB_ARN" != "None" ]]; then
-            # Get listeners
-            echo "Finding listeners for ALB $ALB_ARN..."
-            LISTENERS=$(aws elbv2 describe-listeners --load-balancer-arn "$ALB_ARN" --query "Listeners[].ListenerArn" --output text)
+          # Try with workspace approach first
+          terraform init -reconfigure \
+            -backend-config="bucket=$TF_BUCKET_NAME" \
+            -backend-config="key=terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="encrypt=true"
             
-            # Delete listeners first
-            if [[ -n "$LISTENERS" ]]; then
-              for listener in $LISTENERS; do
-                echo "Deleting listener $listener"
-                aws elbv2 delete-listener --listener-arn "$listener" || echo "Failed to delete listener"
-              done
-            else
-              echo "No listeners found for ALB $ALB_ARN"
+          terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
+          
+          # Check if there are resources to destroy
+          RESOURCE_COUNT=$(terraform state list | wc -l)
+          
+          if [ "$RESOURCE_COUNT" -gt 0 ]; then
+            echo "Found $RESOURCE_COUNT resources in the state. Proceeding with destroy."
+            
+            # First, make sure all resources are properly in the Terraform state
+            # Import Bedrock inference profile if it exists but is not in Terraform state
+            if [ -n "$INFERENCE_PROFILE_ARN" ]; then
+              terraform state list aws_bedrock_inference_profile.claude_opus &> /dev/null || terraform import aws_bedrock_inference_profile.claude_opus "$INFERENCE_PROFILE_ARN" &> /dev/null || echo "Inference profile not imported, will try to clean up manually"
             fi
             
-            # Modify ALB to disable deletion protection
-            echo "Disabling deletion protection for ALB $ALB_ARN..."
-            aws elbv2 modify-load-balancer-attributes --load-balancer-arn "$ALB_ARN" --attributes Key=deletion_protection.enabled,Value=false || echo "Failed to disable deletion protection"
+            # Import S3 bucket for Terraform state if it exists but is not in Terraform state
+            if aws s3 ls "s3://$TF_BUCKET_NAME" &> /dev/null; then
+              terraform state list aws_s3_bucket.terraform_state &> /dev/null || terraform import aws_s3_bucket.terraform_state "$TF_BUCKET_NAME" &> /dev/null || echo "S3 bucket not imported, will try to clean up manually"
+            fi
             
-            # Delete the ALB
-            echo "Deleting ALB $ALB_ARN..."
-            aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" || echo "Failed to delete ALB"
+            # Import ECS service if it exists but is not in Terraform state
+            CLUSTER_NAME="pricing-agent-${ENVIRONMENT}-cluster"
+            SERVICE_NAME="pricing-agent-${ENVIRONMENT}-service"
+            if aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query "services[?status!='INACTIVE']" --output text &> /dev/null; then
+              terraform state list aws_ecs_service.main &> /dev/null || terraform import aws_ecs_service.main "$CLUSTER_NAME/$SERVICE_NAME" &> /dev/null || echo "ECS service not imported, will try to clean up manually"
+            fi
+            
+            # Now destroy all resources
+            terraform destroy -auto-approve
+            echo "terraform_destroy_success=true" >> $GITHUB_OUTPUT
           else
-            echo "No ALB found with name ${NAME_PREFIX}-alb"
+            echo "No resources found in workspace state. Trying legacy state path."
+            
+            # Try with the same workspace approach as the deploy workflow
+            terraform init -reconfigure \
+              -backend-config="bucket=$TF_BUCKET_NAME" \
+              -backend-config="key=terraform.tfstate" \
+              -backend-config="region=${{ secrets.AWS_REGION }}" \
+              -backend-config="encrypt=true"
+              
+            # Select the workspace based on environment
+            terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
+              
+            LEGACY_RESOURCE_COUNT=$(terraform state list | wc -l)
+            
+            if [ "$LEGACY_RESOURCE_COUNT" -gt 0 ]; then
+              echo "Found $LEGACY_RESOURCE_COUNT resources in legacy state. Proceeding with destroy."
+              terraform destroy -auto-approve
+              echo "terraform_destroy_success=true" >> $GITHUB_OUTPUT
+            else
+              echo "No resources found in either state location."
+              echo "terraform_destroy_success=false" >> $GITHUB_OUTPUT
+            fi
           fi
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_project_name: pricing-agent
+          TF_VAR_model_id: "anthropic.claude-opus-4-20250514-v1:0"
+          TF_VAR_domain_name: ""
+          TF_VAR_enable_https: "true"
+          TF_VAR_inference_profile_arn: ""
       
-      - name: Run general cleanup script
+      - name: Manual Cleanup (Fallback Method)
+        if: ${{ env.CLEANUP_METHOD == 'manual' || steps.terraform_destroy.outputs.terraform_destroy_success == 'false' }}
         run: |
-          echo "Running general cleanup script for environment: $ENVIRONMENT"
-          chmod +x ./scripts/cleanup_staging_resources.sh
-          ./scripts/cleanup_staging_resources.sh
+          echo "🧹 Running manual cleanup for ${NAME_PREFIX}..."
+          
+          # Create cleanup script
+          cat > ./cleanup.sh << 'EOF'
+            #!/bin/bash
+#!/bin/bash
+# Cleanup script for pricing-agent resources
+set -e
+
+NAME_PREFIX="${PROJECT}-${ENVIRONMENT}"
+echo "🧹 Cleaning up resources for ${NAME_PREFIX}..."
+
+# 1. Clean up ECS resources
+echo "Cleaning up ECS resources..."
+CLUSTER_NAME="${NAME_PREFIX}-cluster"
+SERVICE_NAME="${NAME_PREFIX}-service"
+
+# Update service to 0 desired count first
+aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --desired-count 0 2>/dev/null || echo "ECS service doesn't exist or already deleted"
+
+# Delete the service
+aws ecs delete-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force 2>/dev/null || echo "ECS service doesn't exist or already deleted"
+
+# Delete the cluster
+aws ecs delete-cluster --cluster "$CLUSTER_NAME" 2>/dev/null || echo "ECS cluster doesn't exist or already deleted"
+
+# 2. Clean up ALB resources
+echo "Cleaning up ALB resources..."
+# Find and delete target groups
+TARGET_GROUPS=$(aws elbv2 describe-target-groups --query "TargetGroups[?starts_with(TargetGroupName, '${NAME_PREFIX}')].TargetGroupArn" --output text 2>/dev/null || echo "")
+for tg in $TARGET_GROUPS; do
+  echo "Deleting target group $tg"
+  aws elbv2 delete-target-group --target-group-arn "$tg" 2>/dev/null || echo "Failed to delete target group"
+done
+
+# Find and delete ALBs
+ALBS=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName, '${NAME_PREFIX}')].LoadBalancerArn" --output text 2>/dev/null || echo "")
+for alb in $ALBS; do
+  # Delete listeners first
+  LISTENERS=$(aws elbv2 describe-listeners --load-balancer-arn "$alb" --query "Listeners[].ListenerArn" --output text 2>/dev/null || echo "")
+  for listener in $LISTENERS; do
+    aws elbv2 delete-listener --listener-arn "$listener" 2>/dev/null || echo "Failed to delete listener"
+  done
+  
+  # Disable deletion protection
+  aws elbv2 modify-load-balancer-attributes --load-balancer-arn "$alb" --attributes Key=deletion_protection.enabled,Value=false 2>/dev/null || echo "Failed to disable deletion protection"
+  
+  # Delete ALB
+  aws elbv2 delete-load-balancer --load-balancer-arn "$alb" 2>/dev/null || echo "Failed to delete ALB"
+done
+
+# 3. Clean up DynamoDB tables
+echo "Cleaning up DynamoDB tables..."
+aws dynamodb delete-table --table-name "${NAME_PREFIX}-pricing-rules" 2>/dev/null || echo "Table doesn't exist or already deleted"
+aws dynamodb delete-table --table-name "${NAME_PREFIX}-inventory" 2>/dev/null || echo "Table doesn't exist or already deleted"
+aws dynamodb delete-table --table-name "${NAME_PREFIX}-sessions" 2>/dev/null || echo "Table doesn't exist or already deleted"
+
+# 4. Clean up S3 buckets
+echo "Cleaning up S3 buckets..."
+aws s3 rm "s3://${NAME_PREFIX}-policies" --recursive 2>/dev/null || echo "Bucket doesn't exist or already emptied"
+aws s3 rb "s3://${NAME_PREFIX}-policies" --force 2>/dev/null || echo "Bucket doesn't exist or already deleted"
+
+# 5. Clean up IAM roles and policies
+echo "Cleaning up IAM roles and policies..."
+# Find and detach policies from roles
+for role in "${NAME_PREFIX}-ecs-execution-role" "${NAME_PREFIX}-ecs-task-role" "${NAME_PREFIX}-bedrock-management-role"; do
+  for policy in $(aws iam list-attached-role-policies --role-name "$role" --query "AttachedPolicies[].PolicyArn" --output text 2>/dev/null || echo ""); do
+    echo "Detaching policy $policy from $role"
+    aws iam detach-role-policy --role-name "$role" --policy-arn "$policy" 2>/dev/null || echo "Failed to detach policy"
+  done
+  aws iam delete-role --role-name "$role" 2>/dev/null || echo "Role doesn't exist or already deleted"
+done
+
+# Delete policies
+for policy in $(aws iam list-policies --scope Local --query "Policies[?starts_with(PolicyName, '${NAME_PREFIX}')].Arn" --output text 2>/dev/null || echo ""); do
+  # Delete non-default versions first
+  for version in $(aws iam list-policy-versions --policy-arn "$policy" --query "Versions[?!IsDefaultVersion].VersionId" --output text 2>/dev/null || echo ""); do
+    aws iam delete-policy-version --policy-arn "$policy" --version-id "$version" 2>/dev/null || echo "Failed to delete policy version"
+  done
+  aws iam delete-policy --policy-arn "$policy" 2>/dev/null || echo "Failed to delete policy"
+done
+
+# 6. Clean up VPC resources
+echo "Cleaning up VPC resources..."
+# Find VPCs related to our application
+VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${NAME_PREFIX}-vpc" --query "Vpcs[].VpcId" --output text 2>/dev/null || echo "")
+if [[ -z "$VPC_IDS" ]]; then
+  echo "No explicitly tagged VPC found, searching by security groups..."
+  # Look for security groups with our prefix to find VPCs
+  for sg in $(aws ec2 describe-security-groups --query "SecurityGroups[?contains(GroupName, '${NAME_PREFIX}')].GroupId" --output text 2>/dev/null || echo ""); do
+    vpc=$(aws ec2 describe-security-groups --group-ids "$sg" --query "SecurityGroups[0].VpcId" --output text 2>/dev/null || echo "")
+    if [[ -n "$vpc" && "$vpc" != "None" ]]; then
+      if [[ ! " $VPC_IDS " =~ " $vpc " ]]; then
+        VPC_IDS="$VPC_IDS $vpc"
+      fi
+    fi
+  done
+fi
+
+for vpc in $VPC_IDS; do
+  echo "Cleaning up VPC $vpc..."
+  
+  # Delete load balancers in this VPC (if any remaining)
+  for lb in $(aws elbv2 describe-load-balancers --query "LoadBalancers[?VpcId=='$vpc'].LoadBalancerArn" --output text 2>/dev/null || echo ""); do
+    aws elbv2 delete-load-balancer --load-balancer-arn "$lb" 2>/dev/null || echo "Failed to delete load balancer"
+  done
+  
+  # Delete NAT Gateways
+  for nat in $(aws ec2 describe-nat-gateways --filter "Name=vpc-id,Values=$vpc" --query "NatGateways[?State!='deleted'].NatGatewayId" --output text 2>/dev/null || echo ""); do
+    aws ec2 delete-nat-gateway --nat-gateway-id "$nat" 2>/dev/null || echo "Failed to delete NAT Gateway"
+  done
+  
+  # Wait for NAT Gateways to be deleted
+  sleep 10
+  
+  # Delete route tables (except main)
+  for rt in $(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query "RouteTables[?Associations[0].Main!=\`true\`].RouteTableId" --output text 2>/dev/null || echo ""); do
+    # Disassociate first
+    for assoc in $(aws ec2 describe-route-tables --route-table-ids "$rt" --query "RouteTables[0].Associations[?Main!=\`true\`].RouteTableAssociationId" --output text 2>/dev/null || echo ""); do
+      aws ec2 disassociate-route-table --association-id "$assoc" 2>/dev/null || echo "Failed to disassociate route table"
+    done
+    aws ec2 delete-route-table --route-table-id "$rt" 2>/dev/null || echo "Failed to delete route table"
+  done
+  
+  # Delete Internet Gateway
+  for igw in $(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[].InternetGatewayId" --output text 2>/dev/null || echo ""); do
+    aws ec2 detach-internet-gateway --internet-gateway-id "$igw" --vpc-id "$vpc" 2>/dev/null || echo "Failed to detach Internet Gateway"
+    aws ec2 delete-internet-gateway --internet-gateway-id "$igw" 2>/dev/null || echo "Failed to delete Internet Gateway"
+  done
+  
+  # Delete security groups (except default)
+  for sg in $(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query "SecurityGroups[?GroupName!='default'].GroupId" --output text 2>/dev/null || echo ""); do
+    # Remove all ingress and egress rules
+    aws ec2 revoke-security-group-ingress --group-id "$sg" --ip-permissions "$(aws ec2 describe-security-groups --group-ids "$sg" --query 'SecurityGroups[0].IpPermissions' --output json)" 2>/dev/null || echo "No ingress rules to revoke"
+    aws ec2 revoke-security-group-egress --group-id "$sg" --ip-permissions "$(aws ec2 describe-security-groups --group-ids "$sg" --query 'SecurityGroups[0].IpPermissionsEgress' --output json)" 2>/dev/null || echo "No egress rules to revoke"
+    aws ec2 delete-security-group --group-id "$sg" 2>/dev/null || echo "Failed to delete security group"
+  done
+  
+  # Delete subnets
+  for subnet in $(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query "Subnets[].SubnetId" --output text 2>/dev/null || echo ""); do
+    aws ec2 delete-subnet --subnet-id "$subnet" 2>/dev/null || echo "Failed to delete subnet"
+  done
+  
+  # Delete VPC
+  aws ec2 delete-vpc --vpc-id "$vpc" 2>/dev/null || echo "Failed to delete VPC"
+done
+
+# 7. Clean up ECR repository
+echo "Cleaning up ECR repository..."
+aws ecr delete-repository --repository-name "${NAME_PREFIX}" --force 2>/dev/null || echo "ECR repository doesn't exist or already deleted"
+
+# 8. Clean up SSM parameters
+echo "Cleaning up SSM parameters..."
+for param in "/${NAME_PREFIX}/pricing-table-name" "/${NAME_PREFIX}/inventory-table-name" "/${NAME_PREFIX}/sessions-table-name" "/${NAME_PREFIX}/kb-id"; do
+  aws ssm delete-parameter --name "$param" 2>/dev/null || echo "SSM parameter $param doesn't exist or already deleted"
+done
+
+echo "✅ Cleanup completed for ${NAME_PREFIX}"
+EOF
+          
+          # Make script executable and run it
+          chmod +x ./cleanup.sh
+          ./cleanup.sh
         env:
           ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          PROJECT: ${{ env.PROJECT }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          
-      - name: Run enhanced VPC cleanup
-        if: ${{ env.FORCE_VPC_CLEANUP == 'true' }}
+      
+      - name: Verify cleanup
         run: |
-          echo "🧹 Running enhanced VPC cleanup to handle dependencies..."
-          chmod +x ./scripts/enhanced_vpc_cleanup.sh
-          ./scripts/enhanced_vpc_cleanup.sh
-        env:
-          ENVIRONMENT: ${{ env.ENVIRONMENT }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+          echo "🔍 Verifying cleanup for ${NAME_PREFIX}..."
           
-      - name: Check for remaining resources
-        run: |
-          echo "🔍 Checking for any remaining resources..."
+          # Check for remaining resources
+          REMAINING_RESOURCES=false
           
-          # Check for remaining VPCs
-          REMAINING_VPCS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${NAME_PREFIX}-vpc" --query "Vpcs[].VpcId" --output text || echo "")
-          if [[ -n "$REMAINING_VPCS" ]]; then
-            echo "⚠️ Warning: Found remaining VPCs: $REMAINING_VPCS"
-            echo "These VPCs still have dependencies that prevented deletion."
-            echo "You may need to manually check for:"
-            echo "- Running EC2 instances or ENIs"
-            echo "- Elastic IPs"
-            echo "- VPC endpoints"
-            echo "- VPC peering connections"
-          else
-            echo "✅ No remaining VPCs found with name ${NAME_PREFIX}-vpc"
+          # Check VPCs
+          if [[ -n "$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${NAME_PREFIX}-vpc" --query "Vpcs[].VpcId" --output text 2>/dev/null || echo "")" ]]; then
+            echo "⚠️ Warning: VPC resources remain"
+            REMAINING_RESOURCES=true
           fi
           
-          # Check for remaining security groups
-          REMAINING_SGS=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=*${NAME_PREFIX}*" --query "SecurityGroups[].GroupId" --output text || echo "")
-          if [[ -n "$REMAINING_SGS" ]]; then
-            echo "⚠️ Warning: Found remaining security groups: $REMAINING_SGS"
-          else
-            echo "✅ No remaining security groups found with name containing ${NAME_PREFIX}"
+          # Check ALBs
+          if [[ -n "$(aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName, '${NAME_PREFIX}')].LoadBalancerArn" --output text 2>/dev/null || echo "")" ]]; then
+            echo "⚠️ Warning: ALB resources remain"
+            REMAINING_RESOURCES=true
           fi
           
-          # Check for remaining load balancers
-          REMAINING_ALBS=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName, '${NAME_PREFIX}')].LoadBalancerArn" --output text || echo "")
-          if [[ -n "$REMAINING_ALBS" ]]; then
-            echo "⚠️ Warning: Found remaining load balancers: $REMAINING_ALBS"
-          else
-            echo "✅ No remaining load balancers found with name starting with ${NAME_PREFIX}"
+          # Check IAM roles
+          if [[ -n "$(aws iam list-roles --query "Roles[?starts_with(RoleName, '${NAME_PREFIX}')].RoleName" --output text 2>/dev/null || echo "")" ]]; then
+            echo "⚠️ Warning: IAM roles remain"
+            REMAINING_RESOURCES=true
           fi
           
-          # Check for remaining target groups
-          REMAINING_TGS=$(aws elbv2 describe-target-groups --query "TargetGroups[?starts_with(TargetGroupName, '${NAME_PREFIX}')].TargetGroupArn" --output text || echo "")
-          if [[ -n "$REMAINING_TGS" ]]; then
-            echo "⚠️ Warning: Found remaining target groups: $REMAINING_TGS"
+          if [[ "$REMAINING_RESOURCES" == "true" ]]; then
+            echo "⚠️ Some resources could not be cleaned up. You may need to check the AWS console."
           else
-            echo "✅ No remaining target groups found with name starting with ${NAME_PREFIX}"
+            echo "✅ All resources have been successfully cleaned up!"
           fi
-          
-          # Check for remaining IAM roles
-          REMAINING_ROLES=$(aws iam list-roles --query "Roles[?starts_with(RoleName, '${NAME_PREFIX}')].RoleName" --output text || echo "")
-          if [[ -n "$REMAINING_ROLES" ]]; then
-            echo "⚠️ Warning: Found remaining IAM roles: $REMAINING_ROLES"
-          else
-            echo "✅ No remaining IAM roles found with name starting with ${NAME_PREFIX}"
-          fi
-          
-          # Check for remaining IAM policies
-          REMAINING_POLICIES=$(aws iam list-policies --scope Local --query "Policies[?starts_with(PolicyName, '${NAME_PREFIX}')].PolicyName" --output text || echo "")
-          if [[ -n "$REMAINING_POLICIES" ]]; then
-            echo "⚠️ Warning: Found remaining IAM policies: $REMAINING_POLICIES"
-          else
-            echo "✅ No remaining IAM policies found with name starting with ${NAME_PREFIX}"
-          fi
-          
-          echo "\n🧹 Cleanup process completed. Check warnings above if any resources remain."

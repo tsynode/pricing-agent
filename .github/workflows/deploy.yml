@@ -132,7 +132,7 @@ jobs:
           echo "Using AWS region: ${{ secrets.AWS_REGION }}"
           echo "Using environment: ${ENVIRONMENT}"
           
-          # Initialize Terraform with S3 backend
+          # Initialize Terraform with S3 backend using workspace approach
           terraform init \
             -backend-config="bucket=$TF_BUCKET_NAME" \
             -backend-config="key=terraform.tfstate" \
@@ -474,8 +474,21 @@ jobs:
             
             # Try Terraform first with targeted approach to avoid lifecycle conflicts
             echo "Attempting to create service via Terraform..."
-            # First import the service if it exists but isn't in the state
-            terraform state list aws_ecs_service.main &>/dev/null || terraform import aws_ecs_service.main pricing-agent-${ENVIRONMENT}-cluster/pricing-agent-${ENVIRONMENT}-service &>/dev/null || echo "Service not imported, will create new"
+            # Import resources that might have been created manually
+            
+            # Import ECS service if it exists but is not in Terraform state
+            terraform state list aws_ecs_service.main &> /dev/null || terraform import aws_ecs_service.main pricing-agent-${ENVIRONMENT}-cluster/pricing-agent-${ENVIRONMENT}-service &> /dev/null || echo "Service not imported, will create new"
+            
+            # Import Bedrock inference profile if it exists but is not in Terraform state
+            if [ -n "$INFERENCE_PROFILE_ARN" ]; then
+              terraform state list aws_bedrock_inference_profile.claude_opus &> /dev/null || terraform import aws_bedrock_inference_profile.claude_opus "$INFERENCE_PROFILE_ARN" &> /dev/null || echo "Inference profile not imported, will create new"
+            fi
+            
+            # Import S3 bucket for Terraform state if it exists but is not in Terraform state
+            if aws s3 ls "s3://$TF_BUCKET_NAME" &> /dev/null; then
+              terraform state list aws_s3_bucket.terraform_state &> /dev/null || terraform import aws_s3_bucket.terraform_state "$TF_BUCKET_NAME" &> /dev/null || echo "S3 bucket not imported, will create new"
+            fi
+            
             # Then apply only the ECS service
             terraform apply -auto-approve -target=aws_ecs_service.main || {
               echo "\n⚠️ Failed to create service through Terraform. Trying AWS CLI...\n"
@@ -507,10 +520,9 @@ jobs:
           TF_VAR_model_id: ${{ env.MODEL }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
           TF_VAR_enable_https: ${{ env.ENABLE_HTTPS }}
-TF_VAR_inference_profile_arn: ${{ env.INFERENCE_PROFILE_ARN }}
-      
-      # ECS Service creation has been consolidated into the previous step
+          TF_VAR_inference_profile_arn: ${{ env.INFERENCE_PROFILE_ARN }}
       - name: Verify ECS Service Status
+        # ECS Service creation has been consolidated into the previous step
         run: |
           echo "\n🔍 Verifying ECS service status...\n"
           
@@ -545,7 +557,7 @@ TF_VAR_inference_profile_arn: ${{ env.INFERENCE_PROFILE_ARN }}
           fi
         env:
           ENVIRONMENT: ${{ env.ENVIRONMENT }}
-      
+          
       - name: Output Deployment Information
         run: |
           # Get ALB DNS from Terraform and save to a file to avoid obfuscation
