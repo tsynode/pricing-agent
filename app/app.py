@@ -17,8 +17,13 @@ st.set_page_config(
 )
 
 # Add the powered by message in the top left corner
+# Get the model ID from environment variables
+model_id = os.environ.get('MODEL_ID', 'anthropic.claude-opus-4-20250514-v1:0')
+# Format the model name for display (remove the vendor prefix and version suffix)
+model_display = model_id.split('.')[-1].split('-v')[0] if '.' in model_id else model_id
+
 st.markdown(
-    "Powered by AWS <span style='color: #FF9900;'>Strands Agents SDK</span>", 
+    f"Powered by AWS <span style='color: #FF9900;'>Strands Agents SDK</span> and Amazon Bedrock model: <span style='color: #FF9900;'>{model_display}</span>", 
     unsafe_allow_html=True
 )
 
