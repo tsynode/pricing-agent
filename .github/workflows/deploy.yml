@@ -127,23 +127,38 @@ jobs:
       - name: Terraform Init and Workspace Setup
         working-directory: ./infrastructure
         run: |
-          # Print environment variables for debugging
-          echo "Using S3 bucket: $TF_BUCKET_NAME"
-          echo "Using AWS region: ${{ secrets.AWS_REGION }}"
+          echo "Setting up Terraform..."
+          
+          # Set the environment based on the GitHub branch
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            ENVIRONMENT="prod"
+          else
+            ENVIRONMENT="dev"
+          fi
+          
           echo "Using environment: ${ENVIRONMENT}"
           
           # Initialize Terraform with S3 backend using workspace approach
+          echo "\n🔍 STEP 1: Initializing Terraform with S3 backend...\n"
           terraform init \
             -backend-config="bucket=$TF_BUCKET_NAME" \
             -backend-config="key=terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}" \
             -backend-config="encrypt=true"
+          
+          echo "\n🔍 STEP 2: Listing available workspaces before selection...\n"
+          terraform workspace list
             
+          echo "\n🔍 STEP 3: Selecting or creating workspace...\n"
           # Select or create workspace based on environment
           terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
           
           # Verify the workspace
-          echo "Active Terraform workspace: $(terraform workspace show)"
+          echo "\n🔍 STEP 4: Active Terraform workspace: $(terraform workspace show)\n"
+          
+          # List the S3 bucket contents to verify state files
+          echo "\n🔍 STEP 5: Checking S3 bucket contents...\n"
+          aws s3 ls s3://$TF_BUCKET_NAME/ --recursive
       
       - name: Terraform Validate
         working-directory: ./infrastructure
@@ -207,58 +222,52 @@ jobs:
           tags: ${{ steps.set-ecr-repo.outputs.ecr_repo_uri }}:latest
           no-cache: true
       
-      - name: Terraform Apply Infrastructure
+      - name: Apply Terraform Infrastructure
         working-directory: ./infrastructure
+        env:
+          TF_VAR_model_id: ${{ env.MODEL }}
+          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
+          TF_VAR_enable_https: ${{ env.ENABLE_HTTPS }}
+          TF_VAR_inference_profile_arn: ${{ env.INFERENCE_PROFILE_ARN }}
         run: |
           echo "\n📝️ Deploying infrastructure...\n"
           
-          # Initialize Terraform and select the appropriate workspace
-          terraform init \
-            -backend-config="bucket=$TF_BUCKET_NAME" \
-            -backend-config="key=terraform.tfstate" \
-            -backend-config="region=${{ secrets.AWS_REGION }}" \
-            -backend-config="encrypt=true"
-            
-          # Ensure we're in the correct workspace
-          terraform workspace select ${ENVIRONMENT}
+          # Note: Terraform has already been initialized and workspace selected in the previous step
+          echo "\n🔍 Verifying active workspace: $(terraform workspace show)\n"
+          
+          echo "\n🔍 Checking S3 bucket contents...\n"
+          aws s3 ls s3://$TF_BUCKET_NAME/ --recursive
           
           # Check current state
           echo "\n🔍 Checking current Terraform state...\n"
           terraform state list || echo "No resources in state yet"
           
-          # For a fresh environment deployment, we'll start with a clean state
-          if [[ "$ENVIRONMENT" == "staging" || "$ENVIRONMENT" == "prod" ]]; then
-            echo "\n🧹 Using workspace: ${ENVIRONMENT}\n"
-            echo "Each workspace has its own isolated state file"
-          fi
+          # Import existing resources if they exist
+          echo "\n🔍 Importing existing resources if they exist...\n"
+          aws s3 ls s3://$TF_BUCKET_NAME 2>/dev/null && \
+            terraform import -allow-missing-config aws_s3_bucket.tf_state $TF_BUCKET_NAME || \
+            echo "S3 bucket does not exist yet, will be created"
           
-          # Apply core infrastructure first
-          echo "\n🧱 Applying core infrastructure...\n"
-          terraform apply -auto-approve \
-            -target=aws_dynamodb_table.inventory \
-            -target=aws_dynamodb_table.pricing \
-            -target=aws_dynamodb_table.sessions \
-            -target=aws_s3_bucket.policy \
-            -target=aws_s3_bucket.session \
-            -target=aws_iam_role.ecs_execution \
-            -target=aws_iam_role.ecs_task || echo "⚠️ Some core resources already exist, continuing with deployment"
+          aws dynamodb describe-table --table-name $TF_LOCK_TABLE 2>/dev/null && \
+            terraform import -allow-missing-config aws_dynamodb_table.tf_lock $TF_LOCK_TABLE || \
+            echo "DynamoDB table does not exist yet, will be created"
           
-          # Apply networking components
-          echo "\n🌐 Applying networking components...\n"
-          terraform apply -auto-approve \
-            -target=aws_vpc.main \
-            -target=aws_subnet.public \
-            -target=aws_subnet.private \
-            -target=aws_security_group.alb \
-            -target=aws_security_group.ecs || echo "⚠️ Some networking resources already exist, continuing with deployment"
+          # Apply Terraform configuration
+          echo "\n📝️ Applying Terraform configuration...\n"
+          terraform apply -auto-approve
           
-          # Apply routing components
-          echo "\n🛣️ Applying routing components...\n"
+          # Get the ALB DNS name
+          echo "\n🔍 Getting ALB DNS name...\n"
+          ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null) || {
+            echo "Failed to get ALB DNS from Terraform output, trying AWS CLI..."
+            ALB_NAME="${NAME_PREFIX}-alb"
+            ALB_DNS=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query "LoadBalancers[0].DNSName" --output text 2>/dev/null) || {
+              echo "Failed to get ALB DNS from AWS CLI"
+              ALB_DNS="unknown"
+            }
+          }
           
-          # Apply internet gateway and route tables first
-          terraform apply -auto-approve \
-            -target=aws_internet_gateway.main \
-            -target=aws_route_table.public \
+          echo "ALB DNS: $ALB_DNS"
             -target=aws_route_table.private || echo "⚠️ Some routing resources already exist, continuing with deployment"
             
           # Check if we have any route table associations in the state
