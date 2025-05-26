@@ -144,18 +144,21 @@ jobs:
       - name: Manual Cleanup (Fallback Method)
         if: ${{ env.CLEANUP_METHOD == 'manual' || steps.terraform_destroy.outputs.terraform_destroy_success == 'false' }}
         run: |
-          echo "🧹 Running manual cleanup for ${NAME_PREFIX}..."
+          echo "Running manual cleanup for ${NAME_PREFIX}..."
           
           # Create cleanup script
           cat > ./cleanup.sh << 'EOF'
             #!/bin/bash
-#!/bin/bash
-# Cleanup script for pricing-agent resources
-set -e
+            # Cleanup script for pricing-agent resources
+            set -e
 
-NAME_PREFIX="${PROJECT}-${ENVIRONMENT}"
-echo "🧹 Cleaning up resources for ${NAME_PREFIX}..."
+            NAME_PREFIX="${PROJECT}-${ENVIRONMENT}"
+            echo "Cleaning up resources for ${NAME_PREFIX}..."
 
+            # 1. Clean up ECS resources
+            echo "Cleaning up ECS resources..."
+            CLUSTER_NAME="${NAME_PREFIX}-cluster"
+            SERVICE_NAME="${NAME_PREFIX}-service"
 # 1. Clean up ECS resources
 echo "Cleaning up ECS resources..."
 CLUSTER_NAME="${NAME_PREFIX}-cluster"
