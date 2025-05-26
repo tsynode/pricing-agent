@@ -56,10 +56,38 @@ def create_agent(session_id=None):
         "region_name": os.environ.get('AWS_REGION', 'us-east-1')
     }
     
+    # Get the inference profile ARN or use model ID as fallback
+    # For Claude 4 Opus, we need to use an inference profile
+    model_id = os.environ.get('MODEL_ID', 'anthropic.claude-opus-4-20250514-v1:0')
+    
+    # Check if an inference profile ARN is provided in the environment
+    inference_profile_arn = os.environ.get('INFERENCE_PROFILE_ARN')
+    
+    # Use the provided inference profile ARN if available
+    if inference_profile_arn:
+        model_identifier = inference_profile_arn
+        print(f"Using provided inference profile ARN: {model_identifier}")
+    # Otherwise, determine if we need an inference profile based on the model
+    elif 'claude-opus-4' in model_id:
+        # Get account and region for constructing the ARN
+        region = os.environ.get('AWS_REGION', 'us-east-1')
+        account_id = boto3.client('sts').get_caller_identity().get('Account')
+        
+        # Format: arn:aws:bedrock:{region}:{account-id}:inference-profile/{profile-name}
+        # We'll create a default inference profile name based on the model and environment
+        env_prefix = os.environ.get('NAME_PREFIX', 'pricing-agent')
+        profile_name = f"{env_prefix}-{model_id.replace(':', '-')}"
+        model_identifier = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/{profile_name}"
+        print(f"Using inferred inference profile ARN: {model_identifier}")
+    else:
+        # For other models, use the model ID directly
+        model_identifier = model_id
+        print(f"Using direct model ID: {model_identifier}")
+    
     # Create the agent with the configured model
     agent = Agent(
         model=BedrockModel(
-            model_id=os.environ.get('MODEL_ID', 'anthropic.claude-opus-4-20250514-v1:0'),
+            model_id=model_identifier,
             max_tokens=4096
         ),
         system_prompt=system_prompt,

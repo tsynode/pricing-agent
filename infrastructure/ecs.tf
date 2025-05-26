@@ -74,6 +74,10 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "MODEL_ID"
           value = var.model_id
+        },
+        {
+          name  = "INFERENCE_PROFILE_ARN"
+          value = aws_bedrock_inference_profile.claude_opus.arn
         }
       ]
       
