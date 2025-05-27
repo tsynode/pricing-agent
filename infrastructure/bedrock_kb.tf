@@ -46,7 +46,7 @@
 
 # Create encryption policy for OpenSearch Serverless
 resource "aws_opensearchserverless_security_policy" "encryption_policy" {
-  name = "${local.name_prefix}-encryption-policy"
+  name = "${local.name_prefix}-enc-pol"
   type = "encryption"
   description = "Encryption policy for OpenSearch Serverless collection"
   policy = jsonencode({
@@ -64,7 +64,7 @@ resource "aws_opensearchserverless_security_policy" "encryption_policy" {
 
 # Create network policy for OpenSearch Serverless
 resource "aws_opensearchserverless_security_policy" "network_policy" {
-  name = "${local.name_prefix}-network-policy"
+  name = "${local.name_prefix}-net-pol"
   type = "network"
   description = "Network policy for OpenSearch Serverless collection"
   policy = jsonencode({
