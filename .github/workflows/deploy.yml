@@ -163,6 +163,40 @@ jobs:
           echo "\n🔍 STEP 5: Checking S3 bucket contents...\n"
           aws s3 ls s3://$TF_BUCKET_NAME/ --recursive
       
+      - name: Import Existing Resources
+        working-directory: ./infrastructure
+        shell: bash
+        run: |
+          echo "Attempting to import existing AWS resources..."
+          # Exit immediately if a command exits with a non-zero status for critical imports.
+          # For non-critical or optional resources, '|| true' or '|| echo' can be used.
+
+          # DynamoDB - Critical, exit on failure
+          echo "Importing DynamoDB table: sessions"
+          (terraform import aws_dynamodb_table.sessions pricing-agent-${ENVIRONMENT}-sessions && echo "DynamoDB sessions table imported successfully.") || echo "Failed to import DynamoDB sessions table or it does not exist / already in state. Continuing..."
+
+          # CloudWatch Log Group - Critical, exit on failure
+          echo "Importing CloudWatch Log Group: main"
+          (terraform import aws_cloudwatch_log_group.main /ecs/pricing-agent-${ENVIRONMENT} && echo "CloudWatch Log Group main imported successfully.") || echo "Failed to import CloudWatch Log Group main or it does not exist / already in state. Continuing..."
+
+          # IAM Roles - Critical, exit on failure
+          echo "Importing IAM Role: ecs_execution"
+          (terraform import aws_iam_role.ecs_execution pricing-agent-${ENVIRONMENT}-ecs-execution-role && echo "IAM Role ecs_execution imported successfully.") || echo "Failed to import IAM Role ecs_execution or it does not exist / already in state. Continuing..."
+          echo "Importing IAM Role: ecs_task"
+          (terraform import aws_iam_role.ecs_task pricing-agent-${ENVIRONMENT}-ecs-task-role && echo "IAM Role ecs_task imported successfully.") || echo "Failed to import IAM Role ecs_task or it does not exist / already in state. Continuing..."
+          
+          # S3 Bucket for Policies - Critical, exit on failure
+          echo "Importing S3 Bucket: policy"
+          (terraform import aws_s3_bucket.policy pricing-agent-${ENVIRONMENT}-policies && echo "S3 policy bucket imported successfully.") || echo "Failed to import S3 policy bucket or it does not exist / already in state. Continuing..."
+          
+          # Example for other resources if needed:
+          # echo "Importing ECS Cluster: main"
+          # (terraform import aws_ecs_cluster.main pricing-agent-${ENVIRONMENT}-cluster && echo "ECS Cluster imported successfully.") || echo "Failed to import ECS Cluster or it does not exist / already in state. Continuing..."
+
+          echo "Resource import process completed."
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+
       - name: Terraform Validate
         working-directory: ./infrastructure
         run: terraform validate
@@ -234,7 +268,7 @@ jobs:
           aws opensearchserverless create-security-policy \
             --name "pricing-agent-${ENVIRONMENT}-encryption-policy" \
             --type encryption \
-            --policy '{"Rules":[{"ResourceType":"collection","Resource":["collection/pricing-agent-'"$ENVIRONMENT"'-kb-collection"]}],"AWSOwnedKey":true}' || echo "Policy may already exist, continuing"
+            --policy '[{"Rules":[{"ResourceType":"collection","Resource":["collection/pricing-agent-'"$ENVIRONMENT"'-kb-collection"]}],"AWSOwnedKey":true}]' || echo "Policy may already exist, continuing"
       
       - name: Apply Terraform Infrastructure
         working-directory: ./infrastructure
@@ -248,7 +282,9 @@ jobs:
           echo "\n📝️ Deploying infrastructure...\n"
           
           # Note: Terraform has already been initialized and workspace selected in the previous step
-          echo "\n🔍 Verifying active workspace: $(terraform workspace show)\n"
+          terraform plan -out=tfplan
+
+          echo "\n🚀 Applying Terraform configuration...\n"
           
           echo "\n🔍 Checking S3 bucket contents...\n"
           aws s3 ls s3://$TF_BUCKET_NAME/ --recursive
