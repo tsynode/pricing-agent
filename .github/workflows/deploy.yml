@@ -223,6 +223,25 @@ jobs:
           echo "Importing SSM Parameter: inventory_table_name"
           (terraform import aws_ssm_parameter.inventory_table_name /pricing-agent-${ENVIRONMENT_NAME}/inventory-table-name && echo "SSM Parameter inventory_table_name imported successfully.") || echo "Failed to import SSM Parameter inventory_table_name or it does not exist / already in state. Continuing..."
 
+          echo "Importing SSM Parameter: policy_bucket_name"
+          (terraform import aws_ssm_parameter.policy_bucket_name /pricing-agent-${ENVIRONMENT_NAME}/policy-bucket-name && echo "SSM Parameter policy_bucket_name imported successfully.") || echo "Failed to import SSM Parameter policy_bucket_name or it does not exist / already in state. Continuing..."
+
+          # Import sample pricing rules items
+          echo "Importing DynamoDB Table Item: sample_pricing_rules[0] (P1001)"
+          (terraform import 'aws_dynamodb_table_item.sample_pricing_rules[0]' pricing-agent-${ENVIRONMENT_NAME}-pricing-rules,P1001 && echo "DynamoDB Item sample_pricing_rules[0] imported successfully.") || echo "Failed to import DynamoDB Item sample_pricing_rules[0] or it does not exist / already in state. Continuing..."
+          echo "Importing DynamoDB Table Item: sample_pricing_rules[1] (P1002)"
+          (terraform import 'aws_dynamodb_table_item.sample_pricing_rules[1]' pricing-agent-${ENVIRONMENT_NAME}-pricing-rules,P1002 && echo "DynamoDB Item sample_pricing_rules[1] imported successfully.") || echo "Failed to import DynamoDB Item sample_pricing_rules[1] or it does not exist / already in state. Continuing..."
+          echo "Importing DynamoDB Table Item: sample_pricing_rules[2] (P2001)"
+          (terraform import 'aws_dynamodb_table_item.sample_pricing_rules[2]' pricing-agent-${ENVIRONMENT_NAME}-pricing-rules,P2001 && echo "DynamoDB Item sample_pricing_rules[2] imported successfully.") || echo "Failed to import DynamoDB Item sample_pricing_rules[2] or it does not exist / already in state. Continuing..."
+
+          # Import sample inventory items
+          echo "Importing DynamoDB Table Item: sample_inventory[0] (P1001)"
+          (terraform import 'aws_dynamodb_table_item.sample_inventory[0]' pricing-agent-${ENVIRONMENT_NAME}-inventory,P1001 && echo "DynamoDB Item sample_inventory[0] imported successfully.") || echo "Failed to import DynamoDB Item sample_inventory[0] or it does not exist / already in state. Continuing..."
+          echo "Importing DynamoDB Table Item: sample_inventory[1] (P1002)"
+          (terraform import 'aws_dynamodb_table_item.sample_inventory[1]' pricing-agent-${ENVIRONMENT_NAME}-inventory,P1002 && echo "DynamoDB Item sample_inventory[1] imported successfully.") || echo "Failed to import DynamoDB Item sample_inventory[1] or it does not exist / already in state. Continuing..."
+          echo "Importing DynamoDB Table Item: sample_inventory[2] (P2001)"
+          (terraform import 'aws_dynamodb_table_item.sample_inventory[2]' pricing-agent-${ENVIRONMENT_NAME}-inventory,P2001 && echo "DynamoDB Item sample_inventory[2] imported successfully.") || echo "Failed to import DynamoDB Item sample_inventory[2] or it does not exist / already in state. Continuing..."
+
           echo "Resource import process completed."
         env:
           ENVIRONMENT: ${{ github.event.inputs.environment }}
