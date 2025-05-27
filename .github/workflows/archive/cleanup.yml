@@ -1,0 +1,191 @@
+name: Cleanup AWS Resources
+
+on:
+  workflow_dispatch:  # Manual trigger only
+    inputs:
+      environment:
+        description: 'Environment to clean up (dev, staging, prod)'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      force_vpc_cleanup:
+        description: 'Force complete VPC cleanup (handles dependencies)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}  # Use input or default to staging
+  PROJECT: 'pricing-agent'
+  FORCE_VPC_CLEANUP: ${{ github.event.inputs.force_vpc_cleanup || 'true' }}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          
+      - name: Verify AWS credentials
+        run: |
+          echo "🔑 Verifying AWS credentials..."
+          
+          # Check if credentials are valid
+          if ! aws sts get-caller-identity &>/dev/null; then
+            echo "::error::AWS credentials have expired. Please update the GitHub repository secrets with fresh credentials."
+            echo "\n⚠️ CLEANUP FAILED: AWS CREDENTIALS EXPIRED ⚠️\n"
+            echo "To fix this issue:"
+            echo "1. Generate new AWS credentials"
+            echo "2. Update the GitHub repository secrets:"
+            echo "   - AWS_ACCESS_KEY_ID"
+            echo "   - AWS_SECRET_ACCESS_KEY"
+            echo "   - AWS_SESSION_TOKEN"
+            echo "3. Run the cleanup workflow again"
+            exit 1
+          else
+            IDENTITY=$(aws sts get-caller-identity --query 'Arn' --output text)
+            echo "✅ AWS credentials are valid: $IDENTITY"
+          fi
+      
+      - name: Set environment variables
+        run: |
+          echo "NAME_PREFIX=${PROJECT}-${ENVIRONMENT}" >> $GITHUB_ENV
+      
+      - name: Clean up ALB resources
+        run: |
+          echo "🧹 Cleaning up ALB resources for ${NAME_PREFIX}..."
+          
+          # Find and delete target group
+          echo "Finding target groups with name ${NAME_PREFIX}-tg..."
+          TARGET_GROUPS=$(aws elbv2 describe-target-groups --query "TargetGroups[?starts_with(TargetGroupName, '${NAME_PREFIX}-tg')].TargetGroupArn" --output text)
+          
+          if [[ -n "$TARGET_GROUPS" ]]; then
+            for tg in $TARGET_GROUPS; do
+              echo "Deleting target group $tg"
+              aws elbv2 delete-target-group --target-group-arn "$tg" || echo "Failed to delete target group"
+            done
+          else
+            echo "No target groups found with name ${NAME_PREFIX}-tg"
+          fi
+          
+          # Find and delete ALB
+          echo "Finding ALB with name ${NAME_PREFIX}-alb..."
+          ALB_ARN=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName, '${NAME_PREFIX}-alb')].LoadBalancerArn" --output text)
+          
+          if [[ -n "$ALB_ARN" && "$ALB_ARN" != "None" ]]; then
+            # Get listeners
+            echo "Finding listeners for ALB $ALB_ARN..."
+            LISTENERS=$(aws elbv2 describe-listeners --load-balancer-arn "$ALB_ARN" --query "Listeners[].ListenerArn" --output text)
+            
+            # Delete listeners first
+            if [[ -n "$LISTENERS" ]]; then
+              for listener in $LISTENERS; do
+                echo "Deleting listener $listener"
+                aws elbv2 delete-listener --listener-arn "$listener" || echo "Failed to delete listener"
+              done
+            else
+              echo "No listeners found for ALB $ALB_ARN"
+            fi
+            
+            # Modify ALB to disable deletion protection
+            echo "Disabling deletion protection for ALB $ALB_ARN..."
+            aws elbv2 modify-load-balancer-attributes --load-balancer-arn "$ALB_ARN" --attributes Key=deletion_protection.enabled,Value=false || echo "Failed to disable deletion protection"
+            
+            # Delete the ALB
+            echo "Deleting ALB $ALB_ARN..."
+            aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" || echo "Failed to delete ALB"
+          else
+            echo "No ALB found with name ${NAME_PREFIX}-alb"
+          fi
+      
+      - name: Run general cleanup script
+        run: |
+          echo "Running general cleanup script for environment: $ENVIRONMENT"
+          chmod +x ./scripts/cleanup_staging_resources.sh
+          ./scripts/cleanup_staging_resources.sh
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          
+      - name: Run enhanced VPC cleanup
+        if: ${{ env.FORCE_VPC_CLEANUP == 'true' }}
+        run: |
+          echo "🧹 Running enhanced VPC cleanup to handle dependencies..."
+          chmod +x ./scripts/enhanced_vpc_cleanup.sh
+          ./scripts/enhanced_vpc_cleanup.sh
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          
+      - name: Check for remaining resources
+        run: |
+          echo "🔍 Checking for any remaining resources..."
+          
+          # Check for remaining VPCs
+          REMAINING_VPCS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${NAME_PREFIX}-vpc" --query "Vpcs[].VpcId" --output text || echo "")
+          if [[ -n "$REMAINING_VPCS" ]]; then
+            echo "⚠️ Warning: Found remaining VPCs: $REMAINING_VPCS"
+            echo "These VPCs still have dependencies that prevented deletion."
+            echo "You may need to manually check for:"
+            echo "- Running EC2 instances or ENIs"
+            echo "- Elastic IPs"
+            echo "- VPC endpoints"
+            echo "- VPC peering connections"
+          else
+            echo "✅ No remaining VPCs found with name ${NAME_PREFIX}-vpc"
+          fi
+          
+          # Check for remaining security groups
+          REMAINING_SGS=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=*${NAME_PREFIX}*" --query "SecurityGroups[].GroupId" --output text || echo "")
+          if [[ -n "$REMAINING_SGS" ]]; then
+            echo "⚠️ Warning: Found remaining security groups: $REMAINING_SGS"
+          else
+            echo "✅ No remaining security groups found with name containing ${NAME_PREFIX}"
+          fi
+          
+          # Check for remaining load balancers
+          REMAINING_ALBS=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName, '${NAME_PREFIX}')].LoadBalancerArn" --output text || echo "")
+          if [[ -n "$REMAINING_ALBS" ]]; then
+            echo "⚠️ Warning: Found remaining load balancers: $REMAINING_ALBS"
+          else
+            echo "✅ No remaining load balancers found with name starting with ${NAME_PREFIX}"
+          fi
+          
+          # Check for remaining target groups
+          REMAINING_TGS=$(aws elbv2 describe-target-groups --query "TargetGroups[?starts_with(TargetGroupName, '${NAME_PREFIX}')].TargetGroupArn" --output text || echo "")
+          if [[ -n "$REMAINING_TGS" ]]; then
+            echo "⚠️ Warning: Found remaining target groups: $REMAINING_TGS"
+          else
+            echo "✅ No remaining target groups found with name starting with ${NAME_PREFIX}"
+          fi
+          
+          # Check for remaining IAM roles
+          REMAINING_ROLES=$(aws iam list-roles --query "Roles[?starts_with(RoleName, '${NAME_PREFIX}')].RoleName" --output text || echo "")
+          if [[ -n "$REMAINING_ROLES" ]]; then
+            echo "⚠️ Warning: Found remaining IAM roles: $REMAINING_ROLES"
+          else
+            echo "✅ No remaining IAM roles found with name starting with ${NAME_PREFIX}"
+          fi
+          
+          # Check for remaining IAM policies
+          REMAINING_POLICIES=$(aws iam list-policies --scope Local --query "Policies[?starts_with(PolicyName, '${NAME_PREFIX}')].PolicyName" --output text || echo "")
+          if [[ -n "$REMAINING_POLICIES" ]]; then
+            echo "⚠️ Warning: Found remaining IAM policies: $REMAINING_POLICIES"
+          else
+            echo "✅ No remaining IAM policies found with name starting with ${NAME_PREFIX}"
+          fi
+          
+          echo "\n🧹 Cleanup process completed. Check warnings above if any resources remain."

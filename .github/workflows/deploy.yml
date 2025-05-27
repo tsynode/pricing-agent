@@ -169,29 +169,59 @@ jobs:
         run: |
           echo "Attempting to import existing AWS resources..."
           # Exit immediately if a command exits with a non-zero status for critical imports.
-          # For non-critical or optional resources, '|| true' or '|| echo' can be used.
+          # set -e # Temporarily disabled to allow individual import checks
 
-          # DynamoDB - Critical, exit on failure
-          echo "Importing DynamoDB table: sessions"
-          (terraform import aws_dynamodb_table.sessions pricing-agent-${ENVIRONMENT}-sessions && echo "DynamoDB sessions table imported successfully.") || echo "Failed to import DynamoDB sessions table or it does not exist / already in state. Continuing..."
+          # Use the environment variable that was set at the workflow level
+          ENVIRONMENT_NAME="${{ env.ENVIRONMENT }}"
+          echo "Using environment for import: ${ENVIRONMENT_NAME}"
 
-          # CloudWatch Log Group - Critical, exit on failure
+          # Get AWS Account ID for constructing ARNs
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          if [ -z "$AWS_ACCOUNT_ID" ]; then
+            echo "::error::Failed to retrieve AWS Account ID. Aborting import."
+            exit 1
+          fi
+          echo "Using AWS Account ID for import: $AWS_ACCOUNT_ID"
+
+          echo "Importing DynamoDB Table: sessions"
+          (terraform import aws_dynamodb_table.sessions pricing-agent-${ENVIRONMENT_NAME}-sessions && echo "DynamoDB Table sessions imported successfully.") || echo "Failed to import DynamoDB Table sessions or it does not exist / already in state. Continuing..."
+
           echo "Importing CloudWatch Log Group: main"
-          (terraform import aws_cloudwatch_log_group.main /ecs/pricing-agent-${ENVIRONMENT} && echo "CloudWatch Log Group main imported successfully.") || echo "Failed to import CloudWatch Log Group main or it does not exist / already in state. Continuing..."
+          (terraform import aws_cloudwatch_log_group.main /ecs/pricing-agent-${ENVIRONMENT_NAME} && echo "CloudWatch Log Group main imported successfully.") || echo "Failed to import CloudWatch Log Group main or it does not exist / already in state. Continuing..."
 
-          # IAM Roles - Critical, exit on failure
           echo "Importing IAM Role: ecs_execution"
-          (terraform import aws_iam_role.ecs_execution pricing-agent-${ENVIRONMENT}-ecs-execution-role && echo "IAM Role ecs_execution imported successfully.") || echo "Failed to import IAM Role ecs_execution or it does not exist / already in state. Continuing..."
+          (terraform import aws_iam_role.ecs_execution pricing-agent-${ENVIRONMENT_NAME}-ecs-execution-role && echo "IAM Role ecs_execution imported successfully.") || echo "Failed to import IAM Role ecs_execution or it does not exist / already in state. Continuing..."
+
           echo "Importing IAM Role: ecs_task"
-          (terraform import aws_iam_role.ecs_task pricing-agent-${ENVIRONMENT}-ecs-task-role && echo "IAM Role ecs_task imported successfully.") || echo "Failed to import IAM Role ecs_task or it does not exist / already in state. Continuing..."
-          
-          # S3 Bucket for Policies - Critical, exit on failure
+          (terraform import aws_iam_role.ecs_task pricing-agent-${ENVIRONMENT_NAME}-ecs-task-role && echo "IAM Role ecs_task imported successfully.") || echo "Failed to import IAM Role ecs_task or it does not exist / already in state. Continuing..."
+
           echo "Importing S3 Bucket: policy"
-          (terraform import aws_s3_bucket.policy pricing-agent-${ENVIRONMENT}-policies && echo "S3 policy bucket imported successfully.") || echo "Failed to import S3 policy bucket or it does not exist / already in state. Continuing..."
-          
-          # Example for other resources if needed:
-          # echo "Importing ECS Cluster: main"
-          # (terraform import aws_ecs_cluster.main pricing-agent-${ENVIRONMENT}-cluster && echo "ECS Cluster imported successfully.") || echo "Failed to import ECS Cluster or it does not exist / already in state. Continuing..."
+          (terraform import aws_s3_bucket.policy pricing-agent-${ENVIRONMENT_NAME}-policies && echo "S3 Bucket policy imported successfully.") || echo "Failed to import S3 Bucket policy or it does not exist / already in state. Continuing..."
+
+          # New imports based on recent errors:
+          echo "Importing IAM Policy: kb_s3_policy"
+          (terraform import aws_iam_policy.kb_s3_policy arn:aws:iam::${AWS_ACCOUNT_ID}:policy/pricing-agent-${ENVIRONMENT_NAME}-kb-s3-policy && echo "IAM Policy kb_s3_policy imported successfully.") || echo "Failed to import IAM Policy kb_s3_policy or it does not exist / already in state. Continuing..."
+
+          echo "Importing IAM Policy: kb_foundation_model_policy"
+          (terraform import aws_iam_policy.kb_foundation_model_policy arn:aws:iam::${AWS_ACCOUNT_ID}:policy/pricing-agent-${ENVIRONMENT_NAME}-kb-foundation-model-policy && echo "IAM Policy kb_foundation_model_policy imported successfully.") || echo "Failed to import IAM Policy kb_foundation_model_policy or it does not exist / already in state. Continuing..."
+
+          echo "Importing SSM Parameter: kb_id"
+          (terraform import aws_ssm_parameter.kb_id /pricing-agent-${ENVIRONMENT_NAME}/knowledge-base-id && echo "SSM Parameter kb_id imported successfully.") || echo "Failed to import SSM Parameter kb_id or it does not exist / already in state. Continuing..."
+
+          echo "Importing DynamoDB Table: pricing"
+          (terraform import aws_dynamodb_table.pricing pricing-agent-${ENVIRONMENT_NAME}-pricing-rules && echo "DynamoDB Table pricing imported successfully.") || echo "Failed to import DynamoDB Table pricing or it does not exist / already in state. Continuing..."
+
+          echo "Importing DynamoDB Table: inventory"
+          (terraform import aws_dynamodb_table.inventory pricing-agent-${ENVIRONMENT_NAME}-inventory && echo "DynamoDB Table inventory imported successfully.") || echo "Failed to import DynamoDB Table inventory or it does not exist / already in state. Continuing..."
+
+          echo "Importing SSM Parameter: sessions_table_name"
+          (terraform import aws_ssm_parameter.sessions_table_name /pricing-agent-${ENVIRONMENT_NAME}/sessions-table-name && echo "SSM Parameter sessions_table_name imported successfully.") || echo "Failed to import SSM Parameter sessions_table_name or it does not exist / already in state. Continuing..."
+
+          echo "Importing SSM Parameter: pricing_table_name"
+          (terraform import aws_ssm_parameter.pricing_table_name /pricing-agent-${ENVIRONMENT_NAME}/pricing-table-name && echo "SSM Parameter pricing_table_name imported successfully.") || echo "Failed to import SSM Parameter pricing_table_name or it does not exist / already in state. Continuing..."
+
+          echo "Importing SSM Parameter: inventory_table_name"
+          (terraform import aws_ssm_parameter.inventory_table_name /pricing-agent-${ENVIRONMENT_NAME}/inventory-table-name && echo "SSM Parameter inventory_table_name imported successfully.") || echo "Failed to import SSM Parameter inventory_table_name or it does not exist / already in state. Continuing..."
 
           echo "Resource import process completed."
         env:
