@@ -139,21 +139,20 @@ jobs:
           export ENVIRONMENT
           
           # Debug: Check all environment variables
-          echo "\n🔍 DEBUG: All environment variables:\n"
+          echo "\n DEBUG: All environment variables:\n"
           env | grep -E 'ENVIRONMENT|TF_VAR|MODEL'
           
           # Initialize Terraform with S3 backend using workspace approach
-          echo "\n🔍 STEP 1: Initializing Terraform with S3 backend...\n"
+          echo "\n STEP 1: Initializing Terraform with S3 backend...\n"
           terraform init \
             -backend-config="bucket=$TF_BUCKET_NAME" \
-            -backend-config="key=terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}" \
             -backend-config="encrypt=true"
           
-          echo "\n🔍 STEP 2: Listing available workspaces before selection...\n"
+          echo "\n STEP 2: Listing available workspaces before selection...\n"
           terraform workspace list
             
-          echo "\n🔍 STEP 3: Selecting or creating workspace...\n"
+          echo "\n STEP 3: Selecting or creating workspace...\n"
           # Select or create workspace based on environment
           terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
           
