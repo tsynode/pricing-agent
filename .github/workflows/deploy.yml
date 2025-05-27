@@ -234,6 +234,10 @@ jobs:
           echo "Importing DynamoDB Table Item: sample_pricing_rules[2] (P2001)"
           (terraform import 'aws_dynamodb_table_item.sample_pricing_rules[2]' pricing-agent-${ENVIRONMENT_NAME}-pricing-rules,P2001 && echo "DynamoDB Item sample_pricing_rules[2] imported successfully.") || echo "Failed to import DynamoDB Item sample_pricing_rules[2] or it does not exist / already in state. Continuing..."
 
+          echo "Importing IAM Policy: ecs_task_policy"
+          POLICY_ARN_ECS_TASK="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/pricing-agent-${ENVIRONMENT_NAME}-ecs-task-policy"
+          (terraform import aws_iam_policy.ecs_task_policy $POLICY_ARN_ECS_TASK && echo "IAM Policy ecs_task_policy imported successfully.") || echo "Failed to import IAM Policy ecs_task_policy or it does not exist / already in state. Continuing..."
+
           # Import sample inventory items
           echo "Importing DynamoDB Table Item: sample_inventory[0] (P1001)"
           (terraform import 'aws_dynamodb_table_item.sample_inventory[0]' pricing-agent-${ENVIRONMENT_NAME}-inventory,P1001 && echo "DynamoDB Item sample_inventory[0] imported successfully.") || echo "Failed to import DynamoDB Item sample_inventory[0] or it does not exist / already in state. Continuing..."
