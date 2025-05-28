@@ -56,28 +56,11 @@ def create_agent(session_id=None):
         "region_name": os.environ.get('AWS_REGION', 'us-east-1')
     }
     
-    # Get the inference profile ARN or use model ID as fallback
-    # For Claude 4 Opus, we need to use an inference profile
-    model_id = os.environ.get('MODEL_ID', 'anthropic.claude-opus-4-20250514-v1:0')
-    
-    # Check if an inference profile ARN is provided in the environment
-    inference_profile_arn = os.environ.get('INFERENCE_PROFILE_ARN')
-    
-    # Use the provided inference profile ARN if available and not set to "none"
-    if inference_profile_arn and inference_profile_arn.lower() != "none":
-        model_identifier = inference_profile_arn
-        print(f"Using provided inference profile ARN: {model_identifier}")
-    # Otherwise, determine if we need an inference profile based on the model
-    elif 'claude-opus-4' in model_id:
-        # Use the system-defined inference profile for Claude Opus 4
-        # TODO: This is a hardcoded inference profile ARN which we'll need to later add to Terraform scripts
-        # and make configurable via environment variables instead of hardcoding
-        model_identifier = "arn:aws:bedrock:us-east-1:489997218859:inference-profile/us.anthropic.claude-opus-4-20250514-v1:0"
-        print(f"Using system-defined inference profile ARN for Claude Opus 4: {model_identifier}")
-    else:
-        # For other models, use the model ID directly
-        model_identifier = model_id
-        print(f"Using direct model ID: {model_identifier}")
+    # Use Claude 3.7 Sonnet model for simplicity and consistency
+    # Standardized on Claude 3.7 Sonnet for simplicity
+    model_id = os.environ.get('MODEL_ID', 'anthropic.claude-3-7-sonnet-20250219-v1:0')
+    model_identifier = model_id
+    print(f"Using model: {model_identifier}")
     
     # Create the agent with the configured model
     agent = Agent(
