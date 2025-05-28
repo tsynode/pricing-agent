@@ -228,72 +228,76 @@ jobs:
           echo "Importing SSM Parameter: policy_bucket_name"
           (terraform import aws_ssm_parameter.policy_bucket_name /pricing-agent-${ENVIRONMENT_NAME}/policy-bucket-name && echo "SSM Parameter policy_bucket_name imported successfully.") || echo "Failed to import SSM Parameter policy_bucket_name or it does not exist / already in state. Continuing..."
 
-          # Import sample pricing rules items
-          PRICING_TABLE_NAME="pricing-agent-${ENVIRONMENT_NAME}-pricing-rules"
-          INVENTORY_TABLE_NAME="pricing-agent-${ENVIRONMENT_NAME}-inventory"
-
-          # Sample Pricing Rules
-          declare -a pricing_product_ids=("P1001" "P1002" "P2001")
-          for product_id in "${pricing_product_ids[@]}"; do
-            echo "Importing sample_pricing_rules for product_id: ${product_id}"
-            # Construct the item attributes JSON for the hash key. Note the careful quoting and escaping.
-            ITEM_KEY_JSON=$(printf '{"product_id":{"S":"%s"}}' "$product_id")
-            terraform import "aws_dynamodb_table_item.sample_pricing_rules[${#pricing_product_ids[@]}-1]" "${PRICING_TABLE_NAME}/${ITEM_KEY_JSON}" || echo "Failed to import pricing rule ${product_id} or already imported."
-          done
-
-          # Sample Inventory Items
-          declare -a inventory_product_ids=("P1001" "P1002" "P2001")
-          for product_id in "${inventory_product_ids[@]}"; do
-            echo "Importing sample_inventory for product_id: ${product_id}"
-            ITEM_KEY_JSON=$(printf '{"product_id":{"S":"%s"}}' "$product_id")
-            terraform import "aws_dynamodb_table_item.sample_inventory[${#inventory_product_ids[@]}-1]" "${INVENTORY_TABLE_NAME}/${ITEM_KEY_JSON}" || echo "Failed to import inventory item ${product_id} or already imported."
-          done
-
           echo "Importing IAM Policy: ecs_task_policy"
           POLICY_ARN_ECS_TASK="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/pricing-agent-${ENVIRONMENT_NAME}-ecs-task-policy"
           (terraform import aws_iam_policy.ecs_task_policy $POLICY_ARN_ECS_TASK && echo "IAM Policy ecs_task_policy imported successfully.") || echo "Failed to import IAM Policy ecs_task_policy or it does not exist / already in state. Continuing..."
 
-          # Import sample inventory items
+          # Fetch VPC ID for the current environment
+          echo "Fetching VPC ID for environment: ${ENVIRONMENT_NAME}"
+          VPC_ID_QUERY=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT_NAME}-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "None")
+          if [ -z "$VPC_ID_QUERY" ] || [ "$VPC_ID_QUERY" == "None" ]; then
+            echo "::warning::VPC for environment ${ENVIRONMENT_NAME} (tag:Name=pricing-agent-${ENVIRONMENT_NAME}-vpc) not found. ALB SG Import might fail or use wrong VPC."
+            # Not exiting here to allow apply to potentially create it, but this is a risky state.
+          else
+            echo "Found VPC ID: ${VPC_ID_QUERY} for environment ${ENVIRONMENT_NAME}"
+          fi
 
           # Import ALB Security Group if it exists
-          echo "Importing Security Group: alb"
-          # Ensure VPC_ID_QUERY is set from the VPC import step (line 188 approx)
+          echo "Importing Security Group: alb (pricing-agent-${ENVIRONMENT_NAME}-alb-sg)"
           if [ -n "$VPC_ID_QUERY" ] && [ "$VPC_ID_QUERY" != "None" ]; then
             ALB_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=pricing-agent-${ENVIRONMENT_NAME}-alb-sg" "Name=vpc-id,Values=${VPC_ID_QUERY}" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "None")
             if [ -n "$ALB_SG_ID" ] && [ "$ALB_SG_ID" != "None" ]; then
-              terraform import aws_security_group.alb $ALB_SG_ID || echo "Failed to import ALB Security Group (pricing-agent-${ENVIRONMENT_NAME}-alb-sg) or already imported."
+              if ! terraform import aws_security_group.alb $ALB_SG_ID; then
+                echo "::error::Failed to import ALB Security Group (ID: $ALB_SG_ID, Name: pricing-agent-${ENVIRONMENT_NAME}-alb-sg). Halting."
+                exit 1
+              fi
+              echo "ALB Security Group pricing-agent-${ENVIRONMENT_NAME}-alb-sg imported successfully."
             else
-              echo "ALB Security Group not found by name pricing-agent-${ENVIRONMENT_NAME}-alb-sg in VPC ${VPC_ID_QUERY}, skipping import."
+              echo "ALB Security Group pricing-agent-${ENVIRONMENT_NAME}-alb-sg not found in VPC ${VPC_ID_QUERY}, skipping import. This might be an error if it's expected to exist."
             fi
           else
-            echo "VPC ID not found (VPC_ID_QUERY was '$VPC_ID_QUERY'), skipping ALB Security Group import."
+            echo "VPC ID not found (VPC_ID_QUERY was '$VPC_ID_QUERY'), skipping ALB Security Group import. This is likely an error."
           fi
 
           # Import ALB Target Group if it exists
-          echo "Importing Target Group: main"
+          echo "Importing Target Group: main (pricing-agent-${ENVIRONMENT_NAME}-tg)"
           TG_ARN=$(aws elbv2 describe-target-groups --names "pricing-agent-${ENVIRONMENT_NAME}-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
           if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
-            terraform import aws_lb_target_group.main $TG_ARN || echo "Failed to import Target Group (pricing-agent-${ENVIRONMENT_NAME}-tg) or already imported."
+            if ! terraform import aws_lb_target_group.main $TG_ARN; then
+              echo "::error::Failed to import Target Group (ARN: $TG_ARN, Name: pricing-agent-${ENVIRONMENT_NAME}-tg). Halting."
+              exit 1
+            fi
+            echo "Target Group pricing-agent-${ENVIRONMENT_NAME}-tg imported successfully."
           else
-            echo "Target Group pricing-agent-${ENVIRONMENT_NAME}-tg not found, skipping import."
+            echo "Target Group pricing-agent-${ENVIRONMENT_NAME}-tg not found, skipping import. This might be an error if it's expected to exist."
           fi
 
           # ALB
-          echo "Importing Application Load Balancer: main"
-          ALB_ARN=$(aws elbv2 describe-load-balancers --names "pricing-agent-${ENVIRONMENT_NAME}-alb" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null)
+          echo "Importing Application Load Balancer: main (pricing-agent-${ENVIRONMENT_NAME}-alb)"
+          ALB_ARN=$(aws elbv2 describe-load-balancers --names "pricing-agent-${ENVIRONMENT_NAME}-alb" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "None")
           if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
-            terraform import aws_lb.main $ALB_ARN || echo "Failed to import ALB or already imported."
+            if ! terraform import aws_lb.main $ALB_ARN; then
+              echo "::error::Failed to import ALB (ARN: $ALB_ARN, Name: pricing-agent-${ENVIRONMENT_NAME}-alb). Halting."
+              exit 1
+            fi
+            echo "ALB pricing-agent-${ENVIRONMENT_NAME}-alb imported successfully."
           else
-            echo "Describing ALB: pricing-agent-${ENVIRONMENT_NAME}-alb not found, skipping import."
+            echo "ALB pricing-agent-${ENVIRONMENT_NAME}-alb not found, skipping import. This might be an error if it's expected to exist."
           fi
 
-          # Target Group
-          echo "Importing Target Group: main"
-          TG_ARN=$(aws elbv2 describe-target-groups --names "pricing-agent-${ENVIRONMENT_NAME}-tg" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
-          if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
-            terraform import aws_lb_target_group.main $TG_ARN || echo "Failed to import Target Group or already imported."
+          # OpenSearch Serverless Encryption Policy
+          echo "Importing OpenSearch Serverless Encryption Policy: encryption_policy"
+          OPENSEARCH_ENC_POLICY_NAME="pricing-agent-${ENVIRONMENT_NAME}-enc-pol"
+          # Check if policy exists before attempting import
+          POLICY_EXISTS=$(aws opensearchserverless get-security-policy --name "${OPENSEARCH_ENC_POLICY_NAME}" --type encryption --query 'securityPolicyDetail.name' --output text 2>/dev/null || echo "None")
+          if [ "$POLICY_EXISTS" == "${OPENSEARCH_ENC_POLICY_NAME}" ]; then
+            if ! terraform import "aws_opensearchserverless_security_policy.encryption_policy" "${OPENSEARCH_ENC_POLICY_NAME}"; then 
+              echo "::warning::Failed to import OpenSearch Encryption Policy ${OPENSEARCH_ENC_POLICY_NAME}. It might already be in state or another issue occurred."
+            else
+              echo "OpenSearch Encryption Policy ${OPENSEARCH_ENC_POLICY_NAME} imported successfully."
+            fi
           else
-            echo "Target Group pricing-agent-${ENVIRONMENT_NAME}-tg not found, skipping import."
+            echo "OpenSearch Encryption Policy ${OPENSEARCH_ENC_POLICY_NAME} not found, skipping import."
           fi
 
           # IAM Role: bedrock_management
