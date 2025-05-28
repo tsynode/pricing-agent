@@ -41,6 +41,34 @@ jobs:
         with:
           terraform_version: 1.7.5
       
+      - name: Create S3 Bucket for Terraform State
+        run: |
+          # Create S3 bucket for Terraform state if it doesn't exist
+          BUCKET_NAME="pricing-agent-tf-state-$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
+          echo "Creating/verifying S3 bucket: $BUCKET_NAME"
+          
+          # Check if bucket exists
+          if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+            echo "Bucket already exists"
+          else
+            echo "Creating bucket..."
+            aws s3api create-bucket \
+              --bucket "$BUCKET_NAME" \
+              --region us-east-1
+            
+            # Enable versioning
+            aws s3api put-bucket-versioning \
+              --bucket "$BUCKET_NAME" \
+              --versioning-configuration Status=Enabled
+            
+            # Enable encryption
+            aws s3api put-bucket-encryption \
+              --bucket "$BUCKET_NAME" \
+              --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
+            
+            echo "Bucket created and configured"
+          fi
+      
       - name: Initialize Terraform
         working-directory: ./infrastructure
         run: |
