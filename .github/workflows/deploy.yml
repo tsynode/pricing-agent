@@ -256,11 +256,11 @@ jobs:
 
           # IAM Role: bedrock_management
           echo "Importing IAM Role: bedrock_management"
-          terraform import aws_iam_role.bedrock_management "${ENVIRONMENT_NAME}-bedrock-management-role" || echo "Failed to import IAM Role bedrock_management or already imported."
+          terraform import aws_iam_role.bedrock_management "pricing-agent-${ENVIRONMENT_NAME}-bedrock-management-role" || echo "Failed to import IAM Role bedrock_management or already imported."
 
           # IAM Policy: bedrock_management_policy
           echo "Importing IAM Policy: bedrock_management_policy"
-          POLICY_ARN_BEDROCK_MGMT="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${ENVIRONMENT_NAME}-bedrock-management-policy"
+          POLICY_ARN_BEDROCK_MGMT="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/pricing-agent-${ENVIRONMENT_NAME}-bedrock-management-policy"
           terraform import aws_iam_policy.bedrock_management_policy $POLICY_ARN_BEDROCK_MGMT || echo "Failed to import IAM Policy bedrock_management_policy or already imported."
 
           # IAM Policy: ecs_bedrock_policy
@@ -271,7 +271,7 @@ jobs:
           # OpenSearch Network Policy
           # The ID for aws_opensearchserverless_security_policy is its name.
           echo "Importing OpenSearch Network Policy: network_policy"
-          terraform import aws_opensearchserverless_security_policy.network_policy "${ENVIRONMENT_NAME}-net-pol/network"
+          terraform import aws_opensearchserverless_security_policy.network_policy "pricing-agent-${ENVIRONMENT_NAME}-net-pol/network"
           echo "OpenSearch Network Policy import command exit code: $?"
 
           # IAM Role: kb_role
