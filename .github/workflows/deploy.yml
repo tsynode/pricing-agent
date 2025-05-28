@@ -43,11 +43,12 @@ on:
         type: string
 
 env:
-  ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
-  MODEL: ${{ github.event.inputs.model_id || 'anthropic.claude-opus-4-20250514-v1:0' }}
-  DOMAIN_NAME: ${{ github.event.inputs.domain_name || '' }}
-  ENABLE_HTTPS: ${{ github.event.inputs.enable_https || 'true' }}
-  INFERENCE_PROFILE_ARN: ${{ github.event.inputs.inference_profile_arn || '' }}
+  ENVIRONMENT: 'staging'
+  MODEL: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
+  DOMAIN_NAME: ''
+  ENABLE_HTTPS: 'true'
+  INFERENCE_PROFILE_ARN: ''
+  AWS_REGION: 'us-east-1'
 
 jobs:
   deploy:
