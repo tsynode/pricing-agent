@@ -58,7 +58,11 @@ def create_agent(session_id=None):
     
     # Use Claude 3 Haiku which supports on-demand throughput
     # This model doesn't require provisioned throughput
-    model_id = os.environ.get('MODEL_ID', 'anthropic.claude-3-haiku-20240307-v1:0')
+    print(f"Environment MODEL_ID: {os.environ.get('MODEL_ID', 'Not set')}")
+    print(f"All environment variables: {dict(os.environ)}")
+    
+    # Force the model to be Claude 3 Haiku regardless of environment variable
+    model_id = 'anthropic.claude-3-haiku-20240307-v1:0'
     model_identifier = model_id
     print(f"Using model: {model_identifier}")
     
