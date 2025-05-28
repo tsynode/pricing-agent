@@ -185,6 +185,19 @@ jobs:
           fi
           echo "Using AWS Account ID for import: $AWS_ACCOUNT_ID"
 
+          # Fetch VPC ID for the current environment FIRST
+          echo "Fetching VPC ID for environment: ${ENVIRONMENT_NAME}"
+          VPC_ID_QUERY=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=pricing-agent-${ENVIRONMENT_NAME}-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "None")
+          if [ -z "$VPC_ID_QUERY" ] || [ "$VPC_ID_QUERY" == "None" ]; then
+            echo "::warning::VPC for environment ${ENVIRONMENT_NAME} (tag:Name=pricing-agent-${ENVIRONMENT_NAME}-vpc) not found. This is critical if it's not the first deployment for this environment."
+            # Allow to proceed if it's truly a first deployment, Terraform will create it.
+            # If it's NOT a first deployment, this will likely lead to issues.
+          else
+            echo "Found VPC ID: ${VPC_ID_QUERY} for environment ${ENVIRONMENT_NAME}"
+            echo "Importing VPC: main (pricing-agent-${ENVIRONMENT_NAME}-vpc)"
+            (terraform import aws_vpc.main "${VPC_ID_QUERY}" && echo "VPC main (${VPC_ID_QUERY}) imported successfully.") || echo "Failed to import VPC main or it does not exist / already in state. CRITICAL IF VPC SHOULD EXIST."
+          fi
+          
           echo "Importing DynamoDB Table: sessions"
           (terraform import aws_dynamodb_table.sessions pricing-agent-${ENVIRONMENT_NAME}-sessions && echo "DynamoDB Table sessions imported successfully.") || echo "Failed to import DynamoDB Table sessions or it does not exist / already in state. Continuing..."
 
