@@ -14,36 +14,21 @@ from tools.pricing import check_price_compliance, update_price, get_pricing_poli
 from tools.inventory import scan_inventory
 
 def get_knowledge_base_id():
-    """Retrieve the knowledge base ID from SSM Parameter Store or use S3 bucket directly"""
-    # Get the policy bucket name from environment variables
-    policy_bucket = os.environ.get('POLICY_BUCKET_NAME', 'pricing-agent-policies')
+    """Retrieve the knowledge base ID from SSM Parameter Store"""
+    ssm = boto3.client('ssm')
+    
+    # Get knowledge base parameter path from environment or use default
+    knowledge_base_param_path = os.environ.get('KB_PARAM_NAME', '/pricing-agent-dev/knowledge-base-id')
     
     try:
-        # Try to get the knowledge base ID from SSM Parameter Store
-        ssm = boto3.client('ssm')
-        knowledge_base_param_path = os.environ.get('KB_PARAM_NAME', '/pricing-agent/knowledge-base-id')
-        print(f"Looking for knowledge base ID at SSM parameter: {knowledge_base_param_path}")
-        
         response = ssm.get_parameter(
             Name=knowledge_base_param_path,
             WithDecryption=False
         )
-        kb_id = response['Parameter']['Value']
-        print(f"Retrieved knowledge base ID: {kb_id}")
-        
-        # Check if the knowledge base ID is a placeholder or empty
-        if not kb_id or kb_id.lower() in ['placeholder', 'placeholder-to-be-updated-manually', 'to-be-updated']:
-            print(f"Knowledge base ID is a placeholder or empty: '{kb_id}'")
-            print(f"Using S3 bucket directly: s3://{policy_bucket}")
-            return f"s3://{policy_bucket}"
-        
-        # Return the valid knowledge base ID
-        return kb_id
-        
+        return response['Parameter']['Value']
     except Exception as e:
         print(f"Error retrieving knowledge base ID: {str(e)}")
-        print(f"Using S3 bucket directly as fallback: s3://{policy_bucket}")
-        return f"s3://{policy_bucket}"
+        return None
 
 def create_agent(session_id=None):
     """Create the pricing agent with optional session restoration"""
@@ -67,10 +52,9 @@ def create_agent(session_id=None):
     # Configure the retrieve tool with the knowledge base
     retrieve_config = {
         "knowledge_base_id": kb_id,
-        "model_id": 'anthropic.claude-3-haiku-20240307-v1:0',  # Use Claude 3 Haiku for knowledge base retrieval
+        "model_id": os.environ.get('MODEL_ID', 'anthropic.claude-opus-4-20250514-v1:0'),
         "region_name": os.environ.get('AWS_REGION', 'us-east-1')
     }
-    print(f"Retrieve tool config: {retrieve_config}")
     
     # Use Claude 3 Haiku which supports on-demand throughput
     # This model doesn't require provisioned throughput
@@ -83,45 +67,23 @@ def create_agent(session_id=None):
     print(f"Using model: {model_identifier}")
     
     # Create the agent with the configured model
-    try:
-        # Import tools directly from the app.tools package
-        from app.tools import get_pricing_policy, check_price_compliance, update_price, scan_inventory
-    except ImportError:
-        # Fallback for when running from within the app directory
-        try:
-            from tools import get_pricing_policy, check_price_compliance, update_price, scan_inventory
-        except ImportError:
-            print("Warning: Could not import custom tools. Using default tools only.")
-            get_pricing_policy = None
-            check_price_compliance = None
-            update_price = None
-            scan_inventory = None
-    
-    # Prepare the tools list
-    tools_list = [
-        # Built-in tools with configuration
-        retrieve.with_config(**retrieve_config),
-        current_time,
-    ]
-    
-    # Add custom tools if available
-    if get_pricing_policy:
-        tools_list.append(get_pricing_policy)
-    if check_price_compliance:
-        tools_list.append(check_price_compliance)
-    if scan_inventory:
-        tools_list.append(scan_inventory)
-    if update_price:
-        tools_list.append(update_price)
-    
-    # Create the agent
     agent = Agent(
         model=BedrockModel(
             model_id=model_identifier,
             max_tokens=4096
         ),
         system_prompt=system_prompt,
-        tools=tools_list
+        tools=[
+            # Built-in tools with configuration
+            {"tool": retrieve, "config": retrieve_config},
+            current_time,
+            
+            # Custom pricing tools
+            check_price_compliance,
+            scan_inventory,
+            update_price,
+            get_pricing_policy
+        ]
     )
     
     # Try to restore session from DynamoDB if session_id is provided
