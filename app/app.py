@@ -1,22 +1,20 @@
+"""
+Streamlit UI for the Pricing Agent
+"""
 import streamlit as st
+import uuid
+import os
+from datetime import datetime
 
-# Set page configuration - MUST be the first Streamlit command
+# Direct import for Docker container environment
+from agent import create_agent, save_agent_session, get_chat_list
+
+# Set page configuration
 st.set_page_config(
     page_title="Pricing Compliance Agent",
     page_icon="💰",
     layout="wide"
 )
-
-"""
-Streamlit UI for the Pricing Agent
-"""
-# Import other libraries after Streamlit configuration
-import uuid
-import os
-from datetime import datetime
-
-# Direct import for Docker container environment - after Streamlit config
-from agent import create_agent, save_agent_session, get_chat_list
 
 # Add the powered by message in the top left corner
 # Get the model ID from environment variables
