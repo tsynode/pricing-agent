@@ -229,6 +229,28 @@ jobs:
           (terraform import aws_ssm_parameter.policy_bucket_name /pricing-agent-${ENVIRONMENT_NAME}/policy-bucket-name && echo "SSM Parameter policy_bucket_name imported successfully.") || echo "Failed to import SSM Parameter policy_bucket_name or it does not exist / already in state. Continuing..."
 
           # Import sample pricing rules items
+          PRICING_TABLE_NAME="pricing-agent-${ENVIRONMENT_NAME}-pricing-rules"
+          INVENTORY_TABLE_NAME="pricing-agent-${ENVIRONMENT_NAME}-inventory"
+
+          # Sample Pricing Rules
+          declare -a pricing_product_ids=("P1001" "P1002" "P2001")
+          for product_id in "${pricing_product_ids[@]}"; do
+            echo "Importing sample_pricing_rules for product_id: ${product_id}"
+            # Construct the item attributes JSON for the hash key. Note the careful quoting and escaping.
+            ITEM_KEY_JSON=$(printf '{"product_id":{"S":"%s"}}' "$product_id")
+            terraform import "aws_dynamodb_table_item.sample_pricing_rules[${#pricing_product_ids[@]}-1]" "${PRICING_TABLE_NAME}/${ITEM_KEY_JSON}" || echo "Failed to import pricing rule ${product_id} or already imported."
+            # Decrement count for correct indexing in Terraform resource (which is count based)
+            unset 'pricing_product_ids[${#pricing_product_ids[@]}-1]'
+          done
+
+          # Sample Inventory Items
+          declare -a inventory_product_ids=("P1001" "P1002" "P2001")
+          for product_id in "${inventory_product_ids[@]}"; do
+            echo "Importing sample_inventory for product_id: ${product_id}"
+            ITEM_KEY_JSON=$(printf '{"product_id":{"S":"%s"}}' "$product_id")
+            terraform import "aws_dynamodb_table_item.sample_inventory[${#inventory_product_ids[@]}-1]" "${INVENTORY_TABLE_NAME}/${ITEM_KEY_JSON}" || echo "Failed to import inventory item ${product_id} or already imported."
+            unset 'inventory_product_ids[${#inventory_product_ids[@]}-1]'
+          done
 
           echo "Importing IAM Policy: ecs_task_policy"
           POLICY_ARN_ECS_TASK="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/pricing-agent-${ENVIRONMENT_NAME}-ecs-task-policy"
@@ -271,8 +293,13 @@ jobs:
           # OpenSearch Network Policy
           # The ID for aws_opensearchserverless_security_policy is its name.
           echo "Importing OpenSearch Network Policy: network_policy"
-          terraform import aws_opensearchserverless_security_policy.network_policy "pricing-agent-${ENVIRONMENT_NAME}-net-pol/network"
+          terraform import aws_opensearchserverless_security_policy.network_policy "pricing-agent-${ENVIRONMENT_NAME}-net-pol/network" || echo "Failed to import OpenSearch Network Policy or already imported."
           echo "OpenSearch Network Policy import command exit code: $?"
+
+          # OpenSearch Encryption Policy
+          echo "Importing OpenSearch Encryption Policy: encryption_policy"
+          terraform import aws_opensearchserverless_security_policy.encryption_policy "pricing-agent-${ENVIRONMENT_NAME}-enc-pol/encryption" || echo "Failed to import OpenSearch Encryption Policy or already imported."
+          echo "OpenSearch Encryption Policy import command exit code: $?"
 
           # IAM Role: kb_role
           echo "Importing IAM Role: kb_role"
