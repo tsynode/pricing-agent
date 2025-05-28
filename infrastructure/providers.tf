@@ -4,10 +4,14 @@ terraform {
       source  = "hashicorp/aws"
       version = "5.86.0"  # Using latest stable version
     }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "~> 4.0.0"
-    }
+  }
+  
+  # Hardcoded S3 backend configuration for simplicity
+  backend "s3" {
+    bucket = "pricing-agent-tf-state"
+    key    = "terraform.tfstate"
+    region = "us-east-1"
+    encrypt = true
   }
   
   required_version = ">= 1.0.0"

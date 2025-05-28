@@ -44,12 +44,8 @@ jobs:
       - name: Initialize Terraform
         working-directory: ./infrastructure
         run: |
-          # Initialize Terraform with S3 backend
-          terraform init \
-            -backend-config="bucket=pricing-agent-tf-state" \
-            -backend-config="key=terraform.tfstate" \
-            -backend-config="region=us-east-1" \
-            -backend-config="encrypt=true"
+          # Initialize Terraform with hardcoded S3 backend
+          terraform init
 
       - name: Terraform Validate
         working-directory: ./infrastructure
