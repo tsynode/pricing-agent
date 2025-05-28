@@ -144,10 +144,7 @@ jobs:
           
           # Initialize Terraform with S3 backend using workspace approach
           echo "\n STEP 1: Initializing Terraform with S3 backend...\n"
-          terraform init \
-            -backend-config="bucket=$TF_BUCKET_NAME" \
-            -backend-config="region=${{ secrets.AWS_REGION }}" \
-            -backend-config="encrypt=true"
+          terraform init
           
           echo "\n STEP 2: Listing available workspaces before selection...\n"
           terraform workspace list
