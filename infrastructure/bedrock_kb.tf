@@ -1,44 +1,23 @@
 # Bedrock Knowledge Base Configuration
-# Resources below are commented out for initial deployment and will be created separately
+# Knowledge Base is managed outside of Terraform for simplicity
+# Only the SSM parameter is managed here for the sync script to use
 
-# resource "aws_bedrock_knowledge_base" "pricing_kb" {
-#   name        = "${local.name_prefix}-kb"
-#   description = "Knowledge base for pricing policies"
-#
-#   storage_configuration {
-#     type = "OPENSEARCH_SERVERLESS"
-#     opensearch_serverless_configuration {
-#       collection_arn = aws_opensearchserverless_collection.kb_collection.arn
-#       vector_index_name = "bedrock-knowledge-base-default-index"
-#       field_mapping {
-#         text_field = "AMAZON_BEDROCK_TEXT_CHUNK"
-#         metadata_field = "AMAZON_BEDROCK_METADATA"
-#         vector_field = "bedrock-knowledge-base-default-vector"
-#       }
-#     }
-#   }
-#
-#   knowledge_base_configuration {
-#     type = "VECTOR"
-#     vector_knowledge_base_configuration {
-#       embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/amazon.titan-embed-text-v2:0"
-#     }
-#   }
-#
-#   # Create IAM role for the knowledge base
-#   role_arn = aws_iam_role.kb_role.arn
-#
-#   # Lifecycle configuration
-#   lifecycle {
+# SSM Parameter to store the Knowledge Base ID
+resource "aws_ssm_parameter" "kb_id" {
+  name  = "/${local.name_prefix}/knowledge-base-id"
+  type  = "String"
+  value = "placeholder-to-be-updated-manually"
+  
+  # Lifecycle configuration
+  lifecycle {
     prevent_destroy = false
-#     ignore_changes = [
-#       storage_configuration,
-#       knowledge_base_configuration
-#     ]
-#   }
-#
-#   tags = local.common_tags
-# }
+    ignore_changes = [
+      value
+    ]
+  }
+  
+  tags = local.common_tags
+}
 
 # Create encryption policy for OpenSearch Serverless
 resource "aws_opensearchserverless_security_policy" "encryption_policy" {
