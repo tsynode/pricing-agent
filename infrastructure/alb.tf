@@ -11,6 +11,7 @@ resource "aws_lb" "main" {
   
   # Allow proper management of resources with workspaces
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       # Only ignore these specific attributes, not the entire resource
       name,
@@ -55,6 +56,7 @@ resource "aws_lb_target_group" "main" {
   
   # Allow proper management of resources with workspaces
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       # Only ignore these specific attributes, not the entire resource
       name,
@@ -107,6 +109,7 @@ resource "aws_lb_listener" "http" {
   # even when the default action is a redirect
   # Also allows proper management of resources with workspaces
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       # Only ignore the default_action, not the entire resource
       default_action
@@ -137,6 +140,7 @@ resource "aws_lb_listener" "https" {
   
   # Allow proper management of resources with workspaces
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       # Only ignore the default_action, not the entire resource
       default_action

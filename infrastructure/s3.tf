@@ -6,6 +6,7 @@ resource "aws_s3_bucket" "policy" {
   # This prevents Terraform from recreating the bucket if it already exists
   # with a slightly different name or configuration
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       bucket,
       server_side_encryption_configuration,
@@ -46,6 +47,7 @@ resource "aws_s3_object" "initial_policies" {
   
   # Prevent conflicts with existing objects
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       etag
     ]

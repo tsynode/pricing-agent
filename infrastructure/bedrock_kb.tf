@@ -35,6 +35,7 @@
 #
 #   # Prevent conflicts with existing knowledge base
 #   lifecycle {
+    prevent_destroy = false
 #     ignore_changes = [
 #       storage_configuration,
 #       knowledge_base_configuration
@@ -95,6 +96,7 @@ resource "aws_opensearchserverless_collection" "kb_collection" {
 
   # Prevent conflicts with existing collection
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       name,
       type
@@ -131,6 +133,7 @@ resource "aws_iam_role" "kb_role" {
   
   # Prevent conflicts with existing role
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       assume_role_policy,
       max_session_duration,
@@ -164,6 +167,7 @@ resource "aws_iam_policy" "kb_opensearch_policy" {
   
   # Prevent conflicts with existing policy
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       description
     ]
@@ -219,6 +223,7 @@ resource "aws_iam_policy" "kb_s3_policy" {
   
   # Prevent conflicts with existing policy
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       description
     ]
@@ -249,6 +254,7 @@ resource "aws_iam_policy" "kb_foundation_model_policy" {
   
   # Prevent conflicts with existing policy
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       description
     ]
@@ -289,6 +295,7 @@ resource "aws_iam_role_policy_attachment" "kb_foundation_model" {
 #   
 #   # Prevent conflicts with existing data source
 #   lifecycle {
+    prevent_destroy = false
 #     ignore_changes = [
 #       data_source_configuration
 #     ]
@@ -304,6 +311,7 @@ resource "aws_ssm_parameter" "kb_id" {
   
   # Prevent conflicts with existing parameter
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       value
     ]

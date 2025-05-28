@@ -7,33 +7,18 @@ on:
       - 'policies/**'
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Environment to deploy to (dev, staging, prod)'
-        required: true
-        default: 'staging'
-        type: choice
-        options:
-          - dev
-          - staging
-          - prod
       model_id:
         description: 'AI model to use'
-        required: true
+        required: false
         default: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
         type: choice
         options:
           - anthropic.claude-opus-4-20250514-v1:0
           - anthropic.claude-sonnet-4-20250514-v1:0
           - anthropic.claude-3-7-sonnet-20250219-v1:0
-      domain_name:
-        description: 'Domain name for the application (e.g., pricing-agent.example.com)'
-        required: false
-        type: string
 
 env:
-  ENVIRONMENT: 'staging'
-  MODEL: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
-  DOMAIN_NAME: ''
+  MODEL_ID: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
   AWS_REGION: 'us-east-1'
 
 jobs:
@@ -66,19 +51,13 @@ jobs:
         with:
           terraform_version: 1.7.5
       
-      - name: Set Terraform State Bucket
-        run: |
-          BUCKET_NAME="pricing-agent-tf-state-tsynode"
-          echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
-          echo "Using S3 bucket: $BUCKET_NAME"
-      
       - name: Initialize Terraform
         working-directory: ./infrastructure
         run: |
           # Initialize Terraform with S3 backend
           terraform init \
-            -backend-config="bucket=pricing-agent-tf-state-tsynode" \
-            -backend-config="key=staging/terraform.tfstate" \
+            -backend-config="bucket=pricing-agent-tf-state" \
+            -backend-config="key=terraform.tfstate" \
             -backend-config="region=us-east-1" \
             -backend-config="encrypt=true"
 
@@ -89,21 +68,18 @@ jobs:
       - name: Create ECR Repository
         working-directory: ./infrastructure
         run: |
-          REPO_NAME="pricing-agent-staging"
+          REPO_NAME="pricing-agent"
           echo "Creating ECR repository $REPO_NAME if it doesn't exist"
           terraform apply -auto-approve -target=aws_ecr_repository.main
         env:
-          TF_VAR_environment: staging
           TF_VAR_project_name: pricing-agent
-          TF_VAR_model_id: ${{ env.MODEL }}
-          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
-          TF_VAR_enable_https: 'true'
+          TF_VAR_model_id: ${{ env.MODEL_ID }}
       
       - name: Set ECR Repository URL
         id: set-ecr-repo
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          ECR_REPO_URI="${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/pricing-agent-staging"
+          ECR_REPO_URI="${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/pricing-agent"
           echo "ecr_repo_uri=$ECR_REPO_URI" >> $GITHUB_OUTPUT
           echo "Using ECR repository: $ECR_REPO_URI"
       
@@ -125,17 +101,15 @@ jobs:
         run: |
           # Create encryption policy for OpenSearch collection
           aws opensearchserverless create-security-policy \
-            --name "pricing-agent-staging-encryption-policy" \
+            --name "pricing-agent-encryption-policy" \
             --type encryption \
-            --policy '[{"Rules":[{"ResourceType":"collection","Resource":["collection/pricing-agent-staging-kb-collection"]}],"AWSOwnedKey":true}]' || echo "Policy may already exist, continuing"
+            --policy '[{"Rules":[{"ResourceType":"collection","Resource":["collection/pricing-agent-kb-collection"]}],"AWSOwnedKey":true}]' || echo "Policy may already exist, continuing"
       
       - name: Apply Terraform Infrastructure
         working-directory: ./infrastructure
         env:
-          TF_VAR_environment: 'staging'
-          TF_VAR_model_id: ${{ env.MODEL }}
-          TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
-          TF_VAR_enable_https: 'true'
+          TF_VAR_project_name: 'pricing-agent'
+          TF_VAR_model_id: ${{ env.MODEL_ID }}
         run: |
           # Generate a plan
           terraform plan -out=tfplan

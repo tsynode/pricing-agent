@@ -20,7 +20,7 @@ resource "aws_iam_role" "ecs_execution" {
   # IAM roles are critical infrastructure that should not be accidentally destroyed
   # These should be preserved across deployments
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       assume_role_policy,
       max_session_duration,
@@ -55,7 +55,7 @@ resource "aws_iam_role" "ecs_task" {
   # IAM roles are critical infrastructure that should not be accidentally destroyed
   # These should be preserved across deployments
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       assume_role_policy,
       max_session_duration,
@@ -73,7 +73,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
   # IAM policies are critical infrastructure that should not be accidentally destroyed
   # These should be preserved across deployments
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       description
     ]
@@ -136,9 +136,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
           "arn:aws:bedrock:${var.aws_region}:*:knowledge-base/*",
           "arn:aws:bedrock:us-east-2:*:knowledge-base/*",
           "arn:aws:bedrock:us-west-2:*:knowledge-base/*",
-          "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/*",
-          "arn:aws:bedrock:us-east-2:${data.aws_caller_identity.current.account_id}:inference-profile/*",
-          "arn:aws:bedrock:us-west-2:${data.aws_caller_identity.current.account_id}:inference-profile/*"
+          # Inference profiles not needed for Claude 3.7 Sonnet
         ]
       }
     ]

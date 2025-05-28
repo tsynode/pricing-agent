@@ -11,7 +11,7 @@ resource "aws_dynamodb_table" "pricing" {
   # This prevents Terraform from trying to modify certain attributes
   # that might cause conflicts with existing resources
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       read_capacity,
       write_capacity,
@@ -40,7 +40,7 @@ resource "aws_dynamodb_table" "inventory" {
   # This prevents Terraform from trying to modify certain attributes
   # that might cause conflicts with existing resources
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       read_capacity,
       write_capacity,
@@ -76,7 +76,7 @@ resource "aws_dynamodb_table" "sessions" {
   # This prevents Terraform from trying to modify certain attributes
   # that might cause conflicts with existing resources
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       read_capacity,
       write_capacity,

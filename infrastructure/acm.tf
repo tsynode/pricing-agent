@@ -26,6 +26,7 @@ resource "aws_acm_certificate" "public" {
   subject_alternative_names = ["*.${var.domain_name}"]
   
   lifecycle {
+    prevent_destroy = false
     create_before_destroy = true
   }
   
@@ -52,6 +53,7 @@ resource "aws_acm_certificate" "self_signed" {
   certificate_body = tls_self_signed_cert.self_signed[0].cert_pem
   
   lifecycle {
+    prevent_destroy = false
     create_before_destroy = true
   }
   

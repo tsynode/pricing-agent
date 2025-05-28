@@ -8,6 +8,7 @@ resource "aws_ecs_cluster" "main" {
   
   # Prevent conflicts with existing clusters
   lifecycle {
+    prevent_destroy = false
     create_before_destroy = true
   }
   
@@ -25,6 +26,7 @@ resource "aws_ecs_task_definition" "main" {
   
   # Task definitions are immutable, so create_before_destroy ensures the new one is created first
   lifecycle {
+    prevent_destroy = false
     create_before_destroy = true
   }
   
@@ -103,6 +105,7 @@ resource "aws_ecs_service" "main" {
   # We allow external updates to task definitions and scaling
   # But we don't set prevent_destroy as services may need recreation during development
   lifecycle {
+    prevent_destroy = false
     create_before_destroy = true
     ignore_changes = [
       task_definition,  # Allow external updates to task definition
@@ -153,6 +156,7 @@ resource "aws_cloudwatch_log_group" "main" {
   # Allow CloudWatch log groups to be recreated during development
   # Only enable prevent_destroy in production
   lifecycle {
+    prevent_destroy = false
     ignore_changes = [
       retention_in_days,
       kms_key_id

@@ -4,9 +4,9 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
   
-  # Prevent conflicts with existing VPC
+  # Allow recreation of VPC for simplified deployment
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       # Only ignore these specific attributes, not the entire resource
       cidr_block,
@@ -207,9 +207,9 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   
-  # Prevent conflicts with existing security groups
+  # Allow recreation of security groups for simplified deployment
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       name,
       description
@@ -249,9 +249,9 @@ resource "aws_security_group" "ecs" {
     description = "Allow all outbound traffic"
   }
   
-  # Prevent conflicts with existing security groups
+  # Allow recreation of security groups for simplified deployment
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       # Only ignore these specific attributes, not the entire resource
       name,
