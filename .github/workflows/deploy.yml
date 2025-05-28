@@ -168,8 +168,10 @@ jobs:
         shell: bash
         run: |
           echo "Attempting to import existing AWS resources..."
+          # Print each command before executing it for debugging.
+          set -x
           # Exit immediately if a command exits with a non-zero status for critical imports.
-          # set -e # Temporarily disabled to allow individual import checks
+          set -e
 
           # Use the environment variable that was set at the workflow level
           ENVIRONMENT_NAME="${{ env.ENVIRONMENT }}"
@@ -233,6 +235,49 @@ jobs:
           (terraform import aws_iam_policy.ecs_task_policy $POLICY_ARN_ECS_TASK && echo "IAM Policy ecs_task_policy imported successfully.") || echo "Failed to import IAM Policy ecs_task_policy or it does not exist / already in state. Continuing..."
 
           # Import sample inventory items
+
+          # ALB
+          echo "Importing Application Load Balancer: main"
+          ALB_ARN=$(aws elbv2 describe-load-balancers --names "${ENVIRONMENT_NAME}-alb" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null)
+          if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
+            terraform import aws_lb.main $ALB_ARN || echo "Failed to import ALB or already imported."
+          else
+            echo "ALB ${ENVIRONMENT_NAME}-alb not found, skipping import."
+          fi
+
+          # Target Group
+          echo "Importing Target Group: main"
+          TG_ARN=$(aws elbv2 describe-target-groups --names "${ENVIRONMENT_NAME}-tg" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
+          if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
+            terraform import aws_lb_target_group.main $TG_ARN || echo "Failed to import Target Group or already imported."
+          else
+            echo "Target Group ${ENVIRONMENT_NAME}-tg not found, skipping import."
+          fi
+
+          # IAM Role: bedrock_management
+          echo "Importing IAM Role: bedrock_management"
+          terraform import aws_iam_role.bedrock_management "${ENVIRONMENT_NAME}-bedrock-management-role" || echo "Failed to import IAM Role bedrock_management or already imported."
+
+          # IAM Policy: bedrock_management_policy
+          echo "Importing IAM Policy: bedrock_management_policy"
+          POLICY_ARN_BEDROCK_MGMT="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${ENVIRONMENT_NAME}-bedrock-management-policy"
+          terraform import aws_iam_policy.bedrock_management_policy $POLICY_ARN_BEDROCK_MGMT || echo "Failed to import IAM Policy bedrock_management_policy or already imported."
+
+          # IAM Policy: ecs_bedrock_policy
+          echo "Importing IAM Policy: ecs_bedrock_policy"
+          POLICY_ARN_ECS_BEDROCK="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${ENVIRONMENT_NAME}-ecs-bedrock-policy"
+          terraform import aws_iam_policy.ecs_bedrock_policy $POLICY_ARN_ECS_BEDROCK || echo "Failed to import IAM Policy ecs_bedrock_policy or already imported."
+
+          # OpenSearch Network Policy
+          # The ID for aws_opensearchserverless_security_policy is its name.
+          echo "Importing OpenSearch Network Policy: network_policy"
+          terraform import aws_opensearchserverless_security_policy.network_policy "${ENVIRONMENT_NAME}-net-pol/network"
+          echo "OpenSearch Network Policy import command exit code: $?"
+
+          # IAM Role: kb_role
+          echo "Importing IAM Role: kb_role"
+          terraform import aws_iam_role.kb_role "${ENVIRONMENT_NAME}-kb-role"
+          echo "IAM Role kb_role import command exit code: $?"
 
           echo "Resource import process completed."
         env:
