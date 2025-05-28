@@ -138,14 +138,11 @@ jobs:
       
       - name: Create OpenSearch Security Policy
         run: |
-          ENVIRONMENT="${{ env.ENVIRONMENT }}"
-          echo "Creating OpenSearch security policy for $ENVIRONMENT environment..."
-          
           # Create encryption policy for OpenSearch collection
           aws opensearchserverless create-security-policy \
-            --name "pricing-agent-${ENVIRONMENT}-encryption-policy" \
+            --name "pricing-agent-staging-encryption-policy" \
             --type encryption \
-            --policy '[{"Rules":[{"ResourceType":"collection","Resource":["collection/pricing-agent-'"$ENVIRONMENT"'-kb-collection"]}],"AWSOwnedKey":true}]' || echo "Policy may already exist, continuing"
+            --policy '[{"Rules":[{"ResourceType":"collection","Resource":["collection/pricing-agent-staging-kb-collection"]}],"AWSOwnedKey":true}]' || echo "Policy may already exist, continuing"
       
       - name: Apply Terraform Infrastructure
         working-directory: ./infrastructure
