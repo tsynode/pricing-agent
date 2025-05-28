@@ -130,10 +130,24 @@ jobs:
 
           # Apply the Terraform configuration
           terraform apply -auto-approve
+      
+      - name: Force ECS Service Redeployment
+        run: |
+          CLUSTER_NAME="pricing-agent-cluster"
+          SERVICE_NAME="pricing-agent-service"
+          
+          echo "Forcing new deployment of ECS service..."
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+          
+          # Wait for the service to stabilize
+          echo "Waiting for service to stabilize..."
+          aws ecs wait services-stable --cluster $CLUSTER_NAME --services $SERVICE_NAME
+          echo "Service redeployment complete"
+          
       - name: Verify ECS Service Status
         run: |
-          CLUSTER_NAME="pricing-agent-staging-cluster"
-          SERVICE_NAME="pricing-agent-staging-service"
+          CLUSTER_NAME="pricing-agent-cluster"
+          SERVICE_NAME="pricing-agent-service"
           
           # Check service status
           SERVICE_INFO=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME 2>/dev/null || echo "NOT_FOUND")
