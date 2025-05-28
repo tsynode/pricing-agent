@@ -4,7 +4,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "6.0.0-beta2"  # Beta version with latest Bedrock support
+      version = "5.86.0"  # Using latest stable version
     }
     tls = {
       source  = "hashicorp/tls"
