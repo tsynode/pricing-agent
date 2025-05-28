@@ -29,25 +29,11 @@ on:
         description: 'Domain name for the application (e.g., pricing-agent.example.com)'
         required: false
         type: string
-      enable_https:
-        description: 'Enable HTTPS for the ALB'
-        required: false
-        default: 'true'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
-      inference_profile_arn:
-        description: 'ARN of the Bedrock inference profile (optional)'
-        required: false
-        type: string
 
 env:
   ENVIRONMENT: 'staging'
   MODEL: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
   DOMAIN_NAME: ''
-  ENABLE_HTTPS: 'true'
-  INFERENCE_PROFILE_ARN: ''
   AWS_REGION: 'us-east-1'
 
 jobs:
@@ -111,8 +97,7 @@ jobs:
           TF_VAR_project_name: pricing-agent
           TF_VAR_model_id: ${{ env.MODEL }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
-          TF_VAR_enable_https: ${{ env.ENABLE_HTTPS }}
-          TF_VAR_inference_profile_arn: ${{ env.INFERENCE_PROFILE_ARN }}
+          TF_VAR_enable_https: 'true'
       
       - name: Set ECR Repository URL
         id: set-ecr-repo
@@ -150,8 +135,7 @@ jobs:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
           TF_VAR_model_id: ${{ env.MODEL }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
-          TF_VAR_enable_https: ${{ env.ENABLE_HTTPS }}
-          TF_VAR_inference_profile_arn: ${{ env.INFERENCE_PROFILE_ARN }}
+          TF_VAR_enable_https: 'true'
         run: |
           echo "\n Deploying infrastructure...\n"
           
@@ -455,10 +439,7 @@ jobs:
             # Import ECS service if it exists but is not in Terraform state
             terraform state list aws_ecs_service.main &> /dev/null || terraform import aws_ecs_service.main pricing-agent-${ENVIRONMENT}-cluster/pricing-agent-${ENVIRONMENT}-service &> /dev/null || echo "Service not imported, will create new"
             
-            # Import Bedrock inference profile if it exists but is not in Terraform state
-            if [ -n "$INFERENCE_PROFILE_ARN" ]; then
-              terraform state list aws_bedrock_inference_profile.claude_opus &> /dev/null || terraform import aws_bedrock_inference_profile.claude_opus "$INFERENCE_PROFILE_ARN" &> /dev/null || echo "Inference profile not imported, will create new"
-            fi
+            # No inference profile needed for Claude 3.7 Sonnet
             
             # Import S3 bucket for Terraform state if it exists but is not in Terraform state
             if aws s3 ls "s3://$TF_BUCKET_NAME" &> /dev/null; then
@@ -494,8 +475,7 @@ jobs:
           export TF_VAR_project_name="pricing-agent"
           export TF_VAR_model_id="$MODEL"
           export TF_VAR_domain_name="$DOMAIN_NAME"
-          export TF_VAR_enable_https="$ENABLE_HTTPS"
-          export TF_VAR_inference_profile_arn="$INFERENCE_PROFILE_ARN"
+          export TF_VAR_enable_https="true"
           
           echo "\n✅ Infrastructure deployment complete!\n"
       - name: Verify ECS Service Status
