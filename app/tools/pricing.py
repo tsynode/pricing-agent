@@ -10,9 +10,7 @@ from datetime import datetime
 
 # Initialize clients
 dynamodb = boto3.resource('dynamodb')
-pricing_table_name = os.environ.get('PRICING_TABLE_NAME', 'pricing-rules')
-pricing_table = dynamodb.Table(pricing_table_name)
-print(f"Initialized pricing table: {pricing_table_name}")
+pricing_table = dynamodb.Table(os.environ.get('PRICING_TABLE_NAME', 'pricing-rules'))
 
 @tool
 def get_pricing_policy(product_category: str = None) -> str:
@@ -24,36 +22,34 @@ def get_pricing_policy(product_category: str = None) -> str:
     Returns:
         The pricing policy information
     """
-    print(f"get_pricing_policy called with category: {product_category}")
-    
     try:
-        # Try to use the retrieve tool first
+        # This function will use the retrieve tool under the hood
         query = f"pricing policies for {product_category}" if product_category else "general pricing policies"
-        print(f"Attempting to retrieve with query: {query}")
         
-        try:
-            results = retrieve(query)
-            print(f"Retrieve results: {results}")
-            
-            if results and results.get('results'):
-                policy_info = ""
-                for result in results.get('results', []):
-                    policy_info += f"{result.get('text', '')}\n\n"
-                return policy_info
-        except Exception as e:
-            print(f"Error using retrieve tool: {str(e)}")
+        # Use the retrieve tool to get information from the knowledge base
+        results = retrieve(query)
         
-        # Fallback to hardcoded policies if retrieve fails
-        print("Falling back to hardcoded policies")
+        if not results or not results.get('results'):
+            print(f"No results from knowledge base for {query}, using hardcoded policies")
+            raise Exception("Using hardcoded policies")
         
-        # Hardcoded policies for testing
+        # Format the results
+        policy_info = ""
+        for result in results.get('results', []):
+            policy_info += f"{result.get('text', '')}\n\n"
+        
+        return policy_info
+    except Exception as e:
+        print(f"Error retrieving policy from knowledge base: {str(e)}. Using hardcoded policies.")
+        # Fallback to hardcoded policies
         policies = {
-            None: """The company has a set of general pricing policies that apply across all product categories:
+            "general": """General Pricing Policies:
 
-1. Minimum Pricing: All products must be priced at least 20% above the wholesale cost to ensure adequate margins.
-2. Maximum Markup: The maximum markup allowed on any product is 100% of the wholesale cost.
-3. Rounding: All prices must be rounded to the nearest whole dollar amount.
-4. Promotional Pricing: Temporary promotional pricing discounts of up to 30% off the regular price are allowed, but must be time-limited.""",
+1. Minimum Margin: All products must maintain at least a 20% margin over wholesale cost.
+2. Competitive Pricing: Prices should be within 10% of major competitors.
+3. Discount Approval: Discounts exceeding 15% require manager approval.
+4. Price Changes: Price increases should not exceed 5% in a 30-day period.
+5. Bundle Pricing: Bundle discounts should not exceed 20% of the combined regular prices.""",
             
             "electronics": """Electronics Category Pricing Policies:
 
@@ -88,11 +84,8 @@ def get_pricing_policy(product_category: str = None) -> str:
         
         if product_category and product_category.lower() in policies:
             return policies[product_category.lower()]
-        return policies[None]
-        
-    except Exception as e:
-        print(f"Unexpected error in get_pricing_policy: {str(e)}")
-        return "Unable to retrieve pricing policies at this time. Please try again later."
+        else:
+            return policies["general"]
 
 @tool
 def check_price_compliance(product_id: str, price: float) -> dict:
@@ -105,85 +98,75 @@ def check_price_compliance(product_id: str, price: float) -> dict:
     Returns:
         A dictionary with compliance status and explanation
     """
-    print(f"check_price_compliance called with product_id: {product_id}, price: {price}")
-    
     try:
-        # Try to get pricing rules from DynamoDB first
+        # Get pricing rules for the product
         try:
-            print(f"Attempting to get item from DynamoDB table: {pricing_table_name}")
             response = pricing_table.get_item(Key={'product_id': product_id})
-            print(f"DynamoDB response: {response}")
             
-            if 'Item' in response:
-                item = response['Item']
-                min_price = item.get('min_price', 0)
-                max_price = item.get('max_price', float('inf'))
-                category = item.get('category', 'Unknown')
-                
-                # Get the pricing policy for this category
-                policy_info = get_pricing_policy(category)
-                
-                # Check compliance
-                compliant = min_price <= price <= max_price
-                
-                return {
-                    "compliant": compliant,
-                    "reason": "Price is within acceptable range" if compliant else f"Price must be between ${min_price} and ${max_price}",
-                    "min_price": min_price,
-                    "max_price": max_price,
-                    "current_price": price,
-                    "category": category,
-                    "policy_info": policy_info
-                }
+            if 'Item' not in response:
+                # Fallback to hardcoded data for demo purposes
+                print(f"No pricing rules found in DynamoDB for product {product_id}, using hardcoded data")
+                raise Exception("Using hardcoded data")
+            
+            item = response['Item']
+            min_price = item.get('min_price', 0)
+            max_price = item.get('max_price', float('inf'))
+            category = item.get('category', 'Unknown')
+            name = item.get('name', f"Product {product_id}")
+            wholesale_cost = item.get('wholesale_cost', 0)
         except Exception as e:
-            print(f"Error accessing DynamoDB: {str(e)}")
-        
-        # Fallback to hardcoded data for testing
-        print("Falling back to hardcoded product data")
-        
-        # Sample product data for testing - expanded with more examples
-        products = {
-            # Electronics
-            "PROD001": {"min_price": 99.99, "max_price": 199.99, "category": "electronics", "name": "Premium Headphones", "wholesale_cost": 79.99},
-            "PROD002": {"min_price": 19.99, "max_price": 39.99, "category": "electronics", "name": "Phone Charger", "wholesale_cost": 12.50},
-            "PROD003": {"min_price": 29.99, "max_price": 59.99, "category": "clothing", "name": "Designer T-Shirt", "wholesale_cost": 18.75},
-            "PROD004": {"min_price": 49.99, "max_price": 99.99, "category": "clothing", "name": "Jeans", "wholesale_cost": 35.00},
+            print(f"Error accessing DynamoDB: {str(e)}. Using hardcoded data instead.")
+            # Sample product data for testing - expanded with more examples
+            products = {
+                # Electronics
+                "PROD001": {"min_price": 99.99, "max_price": 199.99, "category": "electronics", "name": "Premium Headphones", "wholesale_cost": 79.99},
+                "PROD002": {"min_price": 19.99, "max_price": 39.99, "category": "electronics", "name": "Phone Charger", "wholesale_cost": 12.50},
+                "PROD003": {"min_price": 29.99, "max_price": 59.99, "category": "clothing", "name": "Designer T-Shirt", "wholesale_cost": 18.75},
+                "PROD004": {"min_price": 49.99, "max_price": 99.99, "category": "clothing", "name": "Jeans", "wholesale_cost": 35.00},
+                
+                # More Electronics
+                "PROD005": {"min_price": 899.99, "max_price": 1299.99, "category": "electronics", "name": "4K Smart TV", "wholesale_cost": 700.00},
+                "PROD006": {"min_price": 499.99, "max_price": 799.99, "category": "electronics", "name": "Gaming Console", "wholesale_cost": 400.00},
+                "PROD007": {"min_price": 299.99, "max_price": 499.99, "category": "electronics", "name": "Tablet", "wholesale_cost": 220.00},
+                "PROD008": {"min_price": 79.99, "max_price": 129.99, "category": "electronics", "name": "Wireless Earbuds", "wholesale_cost": 60.00},
+                
+                # More Clothing
+                "PROD009": {"min_price": 89.99, "max_price": 149.99, "category": "clothing", "name": "Winter Jacket", "wholesale_cost": 65.00},
+                "PROD010": {"min_price": 59.99, "max_price": 99.99, "category": "clothing", "name": "Dress Shoes", "wholesale_cost": 45.00},
+                "PROD011": {"min_price": 39.99, "max_price": 69.99, "category": "clothing", "name": "Formal Shirt", "wholesale_cost": 30.00},
+                "PROD012": {"min_price": 24.99, "max_price": 44.99, "category": "clothing", "name": "Casual Shorts", "wholesale_cost": 18.00},
+                
+                # Home Goods
+                "PROD013": {"min_price": 199.99, "max_price": 349.99, "category": "home", "name": "Coffee Machine", "wholesale_cost": 150.00},
+                "PROD014": {"min_price": 129.99, "max_price": 229.99, "category": "home", "name": "Blender Set", "wholesale_cost": 95.00},
+                "PROD015": {"min_price": 79.99, "max_price": 149.99, "category": "home", "name": "Bedding Set", "wholesale_cost": 60.00},
+                "PROD016": {"min_price": 49.99, "max_price": 89.99, "category": "home", "name": "Towel Set", "wholesale_cost": 35.00},
+                
+                # Fresh Produce (perishable items with time-based pricing)
+                "PROD017": {"min_price": 3.99, "max_price": 5.99, "category": "fresh_produce", "name": "Fresh Bread (Loaf)", "wholesale_cost": 2.50, "perishable": True},
+                "PROD018": {"min_price": 2.99, "max_price": 4.99, "category": "fresh_produce", "name": "Milk (1 Gallon)", "wholesale_cost": 2.00, "perishable": True},
+                "PROD019": {"min_price": 4.99, "max_price": 7.99, "category": "fresh_produce", "name": "Fresh Strawberries", "wholesale_cost": 3.50, "perishable": True},
+                "PROD020": {"min_price": 1.99, "max_price": 3.49, "category": "fresh_produce", "name": "Bananas (Bunch)", "wholesale_cost": 1.20, "perishable": True},
+                "PROD021": {"min_price": 5.99, "max_price": 8.99, "category": "fresh_produce", "name": "Fresh Fish Fillet", "wholesale_cost": 4.50, "perishable": True},
+                "PROD022": {"min_price": 3.49, "max_price": 5.99, "category": "fresh_produce", "name": "Yogurt (32oz)", "wholesale_cost": 2.25, "perishable": True},
+                "PROD023": {"min_price": 2.49, "max_price": 4.29, "category": "fresh_produce", "name": "Fresh Eggs (Dozen)", "wholesale_cost": 1.80, "perishable": True},
+                "PROD024": {"min_price": 6.99, "max_price": 9.99, "category": "fresh_produce", "name": "Fresh Cheese", "wholesale_cost": 5.00, "perishable": True}
+            }
             
-            # More Electronics
-            "PROD005": {"min_price": 899.99, "max_price": 1299.99, "category": "electronics", "name": "4K Smart TV", "wholesale_cost": 700.00},
-            "PROD006": {"min_price": 499.99, "max_price": 799.99, "category": "electronics", "name": "Gaming Console", "wholesale_cost": 400.00},
-            "PROD007": {"min_price": 299.99, "max_price": 499.99, "category": "electronics", "name": "Tablet", "wholesale_cost": 220.00},
-            "PROD008": {"min_price": 79.99, "max_price": 129.99, "category": "electronics", "name": "Wireless Earbuds", "wholesale_cost": 60.00},
+            # Use default values if product not found
+            product_data = products.get(product_id, {
+                "min_price": 0, 
+                "max_price": float('inf'),
+                "category": "Unknown",
+                "name": f"Product {product_id}",
+                "wholesale_cost": 0
+            })
             
-            # More Clothing
-            "PROD009": {"min_price": 89.99, "max_price": 149.99, "category": "clothing", "name": "Winter Jacket", "wholesale_cost": 65.00},
-            "PROD010": {"min_price": 59.99, "max_price": 99.99, "category": "clothing", "name": "Dress Shoes", "wholesale_cost": 45.00},
-            "PROD011": {"min_price": 39.99, "max_price": 69.99, "category": "clothing", "name": "Formal Shirt", "wholesale_cost": 30.00},
-            "PROD012": {"min_price": 24.99, "max_price": 44.99, "category": "clothing", "name": "Casual Shorts", "wholesale_cost": 18.00},
-            
-            # Home Goods
-            "PROD013": {"min_price": 199.99, "max_price": 349.99, "category": "home", "name": "Coffee Machine", "wholesale_cost": 150.00},
-            "PROD014": {"min_price": 129.99, "max_price": 229.99, "category": "home", "name": "Blender Set", "wholesale_cost": 95.00},
-            "PROD015": {"min_price": 79.99, "max_price": 149.99, "category": "home", "name": "Bedding Set", "wholesale_cost": 60.00},
-            "PROD016": {"min_price": 49.99, "max_price": 89.99, "category": "home", "name": "Towel Set", "wholesale_cost": 35.00},
-            
-            # Fresh Produce (perishable items with time-based pricing)
-            "PROD017": {"min_price": 3.99, "max_price": 5.99, "category": "fresh_produce", "name": "Fresh Bread (Loaf)", "wholesale_cost": 2.50, "perishable": True},
-            "PROD018": {"min_price": 2.99, "max_price": 4.99, "category": "fresh_produce", "name": "Milk (1 Gallon)", "wholesale_cost": 2.00, "perishable": True},
-            "PROD019": {"min_price": 4.99, "max_price": 7.99, "category": "fresh_produce", "name": "Fresh Strawberries", "wholesale_cost": 3.50, "perishable": True},
-            "PROD020": {"min_price": 1.99, "max_price": 3.49, "category": "fresh_produce", "name": "Bananas (Bunch)", "wholesale_cost": 1.20, "perishable": True},
-            "PROD021": {"min_price": 5.99, "max_price": 8.99, "category": "fresh_produce", "name": "Fresh Fish Fillet", "wholesale_cost": 4.50, "perishable": True},
-            "PROD022": {"min_price": 3.49, "max_price": 5.99, "category": "fresh_produce", "name": "Yogurt (32oz)", "wholesale_cost": 2.25, "perishable": True},
-            "PROD023": {"min_price": 2.49, "max_price": 4.29, "category": "fresh_produce", "name": "Fresh Eggs (Dozen)", "wholesale_cost": 1.80, "perishable": True},
-            "PROD024": {"min_price": 6.99, "max_price": 9.99, "category": "fresh_produce", "name": "Fresh Cheese", "wholesale_cost": 5.00, "perishable": True}
-        }
-        
-        # Use default values if product not found
-        product_data = products.get(product_id, {"min_price": 10.0, "max_price": 100.0, "category": None, "name": "Unknown Product"})
-        
-        min_price = product_data["min_price"]
-        max_price = product_data["max_price"]
-        category = product_data["category"]
+            min_price = product_data.get("min_price")
+            max_price = product_data.get("max_price")
+            category = product_data.get("category")
+            name = product_data.get("name")
+            wholesale_cost = product_data.get("wholesale_cost")
         
         # Get the pricing policy for this category
         policy_info = get_pricing_policy(category)
@@ -222,21 +205,26 @@ def check_price_compliance(product_id: str, price: float) -> dict:
         # Check compliance with the final price
         compliant = min_price <= price <= max_price
         
-        return {
+        result = {
             "compliant": compliant,
             "reason": "Price is within acceptable range" if compliant else f"Price must be between ${min_price} and ${max_price}",
             "min_price": min_price,
             "max_price": max_price,
-            "original_price": original_price,
-            "current_price": price,
-            "discount_applied": discount_percentage > 0,
-            "discount_percentage": discount_percentage if discount_percentage > 0 else None,
-            "discount_reason": discount_reason if discount_percentage > 0 else None,
+            "current_price": original_price,  # Original price before any discounts
+            "final_price": price,  # Price after any discounts
             "category": category,
+            "product_name": name,
             "policy_info": policy_info
         }
+        
+        # Add discount information if applicable
+        if discount_percentage > 0:
+            result["discount_applied"] = True
+            result["discount_percentage"] = discount_percentage
+            result["discount_reason"] = discount_reason
+        
+        return result
     except Exception as e:
-        print(f"Unexpected error in check_price_compliance: {str(e)}")
         return {
             "compliant": False,
             "reason": f"Error checking compliance: {str(e)}"
@@ -253,8 +241,6 @@ def update_price(product_id: str, new_price: float) -> dict:
     Returns:
         A dictionary with update status and details
     """
-    print(f"update_price called with product_id: {product_id}, new_price: {new_price}")
-    
     try:
         # First check if the new price is compliant
         compliance_check = check_price_compliance(product_id, new_price)
@@ -267,8 +253,7 @@ def update_price(product_id: str, new_price: float) -> dict:
             }
         
         try:
-            # Try to update in DynamoDB first
-            print(f"Attempting to update price in DynamoDB table: {os.environ.get('INVENTORY_TABLE_NAME', 'inventory')}")
+            # Get the inventory table
             inventory_table = dynamodb.Table(os.environ.get('INVENTORY_TABLE_NAME', 'inventory'))
             
             # Update the price in the inventory
@@ -282,38 +267,32 @@ def update_price(product_id: str, new_price: float) -> dict:
                 ReturnValues="UPDATED_NEW"
             )
             
-            print(f"DynamoDB update response: {response}")
+            return {
+                "success": True,
+                "product_id": product_id,
+                "old_price": compliance_check.get("current_price"),
+                "new_price": compliance_check.get("final_price"),  # Use the final price after any discounts
+                "updated_at": response.get("Attributes", {}).get("last_updated"),
+                "discount_applied": compliance_check.get("discount_applied", False),
+                "discount_percentage": compliance_check.get("discount_percentage"),
+                "discount_reason": compliance_check.get("discount_reason")
+            }
+        except Exception as e:
+            print(f"Error updating price in DynamoDB: {str(e)}. Simulating update for demo.")
+            # Simulate a successful update for demo purposes
+            current_time = datetime.now().isoformat()
             
             return {
                 "success": True,
                 "product_id": product_id,
-                "old_price": compliance_check.get("original_price"),
-                "new_price": new_price,
+                "old_price": compliance_check.get("current_price"),
+                "new_price": compliance_check.get("final_price"),  # Use the final price after any discounts
                 "discount_applied": compliance_check.get("discount_applied", False),
                 "discount_percentage": compliance_check.get("discount_percentage"),
                 "discount_reason": compliance_check.get("discount_reason"),
-                "updated_at": response.get("Attributes", {}).get("last_updated")
+                "updated_at": current_time,
+                "note": "This is a simulated update for demonstration purposes. No actual database was modified."
             }
-        except Exception as e:
-            print(f"Error updating price in DynamoDB: {str(e)}")
-            
-        # Fallback for demo purposes - simulate a successful update
-        print("Falling back to simulated price update for demo purposes")
-        current_time = datetime.now().isoformat()
-        
-        return {
-            "success": True,
-            "product_id": product_id,
-            "product_name": "Unknown Product",  # Will be filled if product is found
-            "category": compliance_check.get("category", "Unknown"),
-            "old_price": compliance_check.get("original_price"),
-            "new_price": new_price,
-            "discount_applied": compliance_check.get("discount_applied", False),
-            "discount_percentage": compliance_check.get("discount_percentage"),
-            "discount_reason": compliance_check.get("discount_reason"),
-            "updated_at": current_time,
-            "note": "This is a simulated update for demonstration purposes. No actual database was modified."
-        }
     except Exception as e:
         print(f"Unexpected error in update_price: {str(e)}")
         return {
