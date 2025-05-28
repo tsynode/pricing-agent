@@ -18,7 +18,7 @@ def get_knowledge_base_id():
     ssm = boto3.client('ssm')
     
     # Get knowledge base parameter path from environment or use default
-    knowledge_base_param_path = os.environ.get('KB_PARAM_NAME', '/pricing-agent-dev/knowledge-base-id')
+    knowledge_base_param_path = os.environ.get('KB_PARAM_NAME', '/pricing-agent/knowledge-base-id')
     print(f"Looking for knowledge base ID at SSM parameter: {knowledge_base_param_path}")
     
     try:
@@ -28,13 +28,35 @@ def get_knowledge_base_id():
         )
         kb_id = response['Parameter']['Value']
         print(f"Retrieved knowledge base ID: {kb_id}")
+        
+        # Check if the knowledge base ID is a placeholder
+        if kb_id.lower() in ['placeholder', 'placeholder-to-be-updated-manually', 'to-be-updated']:
+            print(f"Knowledge base ID is a placeholder: {kb_id}")
+            # Use a hardcoded knowledge base ID for testing
+            hardcoded_id = os.environ.get('HARDCODED_KB_ID', '')
+            if hardcoded_id:
+                print(f"Using environment variable HARDCODED_KB_ID: {hardcoded_id}")
+                return hardcoded_id
+            else:
+                print("No hardcoded knowledge base ID available, using S3 bucket directly")
+                # Use the policy bucket directly instead of a knowledge base
+                policy_bucket = os.environ.get('POLICY_BUCKET_NAME', 'pricing-agent-policies')
+                print(f"Using policy bucket as fallback: {policy_bucket}")
+                return f"s3://{policy_bucket}"
         return kb_id
     except Exception as e:
         print(f"Error retrieving knowledge base ID: {str(e)}")
         # For testing, return a hardcoded knowledge base ID
         hardcoded_id = os.environ.get('HARDCODED_KB_ID', '')
-        print(f"Using hardcoded knowledge base ID for testing: {hardcoded_id if hardcoded_id else 'None provided'}")
-        return hardcoded_id
+        if hardcoded_id:
+            print(f"Using hardcoded knowledge base ID for testing: {hardcoded_id}")
+            return hardcoded_id
+        else:
+            print("No hardcoded knowledge base ID available, using S3 bucket directly")
+            # Use the policy bucket directly instead of a knowledge base
+            policy_bucket = os.environ.get('POLICY_BUCKET_NAME', 'pricing-agent-policies')
+            print(f"Using policy bucket as fallback: {policy_bucket}")
+            return f"s3://{policy_bucket}"
 
 def create_agent(session_id=None):
     """Create the pricing agent with optional session restoration"""
