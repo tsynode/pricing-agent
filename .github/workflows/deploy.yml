@@ -6,19 +6,9 @@ on:
     paths-ignore:
       - 'policies/**'
   workflow_dispatch:
-    inputs:
-      model_id:
-        description: 'AI model to use'
-        required: false
-        default: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
-        type: choice
-        options:
-          - anthropic.claude-opus-4-20250514-v1:0
-          - anthropic.claude-sonnet-4-20250514-v1:0
-          - anthropic.claude-3-7-sonnet-20250219-v1:0
+    inputs: {}
 
 env:
-  MODEL_ID: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
   AWS_REGION: 'us-east-1'
 
 jobs:
@@ -73,7 +63,7 @@ jobs:
           terraform apply -auto-approve -target=aws_ecr_repository.main
         env:
           TF_VAR_project_name: pricing-agent
-          TF_VAR_model_id: ${{ env.MODEL_ID }}
+          TF_VAR_model_id: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
       
       - name: Set ECR Repository URL
         id: set-ecr-repo
@@ -109,7 +99,7 @@ jobs:
         working-directory: ./infrastructure
         env:
           TF_VAR_project_name: 'pricing-agent'
-          TF_VAR_model_id: ${{ env.MODEL_ID }}
+          TF_VAR_model_id: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
         run: |
           # Generate a plan
           terraform plan -out=tfplan
