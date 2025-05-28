@@ -1,6 +1,3 @@
-"""
-Streamlit UI for the Pricing Agent
-"""
 import streamlit as st
 
 # Set page configuration - MUST be the first Streamlit command
@@ -10,6 +7,9 @@ st.set_page_config(
     layout="wide"
 )
 
+"""
+Streamlit UI for the Pricing Agent
+"""
 # Import other libraries after Streamlit configuration
 import uuid
 import os
