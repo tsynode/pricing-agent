@@ -58,10 +58,4 @@ variable "model_id" {
   default     = "anthropic.claude-3-7-sonnet-20250219-v1:0"
 }
 
-variable "certificate_arn" {
-  description = "ARN of the SSL certificate for HTTPS support"
-  type        = string
-  default     = null
-}
-
-# Inference profile is not needed for Claude 3.7 Sonnet
+# HTTPS support removed for simplicity

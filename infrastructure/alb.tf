@@ -81,26 +81,9 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
   
   default_action {
-    # If HTTPS is enabled, redirect to HTTPS
-    # Otherwise, forward traffic directly to the target group
-    type = var.enable_https ? "redirect" : "forward"
-    
-    dynamic "redirect" {
-      for_each = var.enable_https ? [1] : []
-      content {
-        port        = "443"
-        protocol    = "HTTPS"
-        status_code = "HTTP_301"
-      }
-    }
-    
-    dynamic "forward" {
-      for_each = !var.enable_https ? [1] : []
-      content {
-        target_group {
-          arn = aws_lb_target_group.main.arn
-        }
-      }
+    type = "forward"
+    target_group {
+      arn = aws_lb_target_group.main.arn
     }
   }
   
@@ -120,36 +103,4 @@ resource "aws_lb_listener" "http" {
   tags = local.common_tags
 }
 
-# HTTPS listener for the ALB (created if HTTPS is enabled, with either domain or self-signed cert)
-# Routes incoming HTTPS traffic to the target group
-resource "aws_lb_listener" "https" {
-  count = var.enable_https ? 1 : 0
-  
-  load_balancer_arn = aws_lb.main.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = local.certificate_arn
-  
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-  
-  # Lifecycle configuration for load balancer
-  lifecycle {
-    prevent_destroy = false
-    ignore_changes = [
-      # Only ignore the default_action, not the entire resource
-      default_action
-    ]
-  }
-  
-  # Explicit dependency on ALB and target group
-  depends_on = [
-    aws_lb.main,
-    aws_lb_target_group.main
-  ]
-  
-  tags = local.common_tags
-}
+# Removed HTTPS listener for simplicity
