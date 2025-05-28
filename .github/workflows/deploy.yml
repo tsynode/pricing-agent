@@ -265,7 +265,7 @@ jobs:
 
           # IAM Policy: ecs_bedrock_policy
           echo "Importing IAM Policy: ecs_bedrock_policy"
-          POLICY_ARN_ECS_BEDROCK="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${ENVIRONMENT_NAME}-ecs-bedrock-policy"
+          POLICY_ARN_ECS_BEDROCK="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/pricing-agent-${ENVIRONMENT_NAME}-ecs-bedrock-policy"
           terraform import aws_iam_policy.ecs_bedrock_policy $POLICY_ARN_ECS_BEDROCK || echo "Failed to import IAM Policy ecs_bedrock_policy or already imported."
 
           # OpenSearch Network Policy
@@ -276,7 +276,7 @@ jobs:
 
           # IAM Role: kb_role
           echo "Importing IAM Role: kb_role"
-          terraform import aws_iam_role.kb_role "${ENVIRONMENT_NAME}-kb-role"
+          terraform import aws_iam_role.kb_role "pricing-agent-${ENVIRONMENT_NAME}-kb-role"
           echo "IAM Role kb_role import command exit code: $?"
 
           echo "Resource import process completed."
