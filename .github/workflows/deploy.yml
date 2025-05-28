@@ -10,7 +10,7 @@ on:
       environment:
         description: 'Environment to deploy to (dev, staging, prod)'
         required: true
-        default: 'dev'
+        default: 'staging'
         type: choice
         options:
           - dev
@@ -89,12 +89,7 @@ jobs:
       - name: Initialize Terraform
         working-directory: ./infrastructure
         run: |
-          echo "Initializing Terraform for environment: ${{ env.ENVIRONMENT }}"
-          
-          export ENVIRONMENT
-          
           # Initialize Terraform with S3 backend
-          echo "Initializing Terraform backend..."
           terraform init \
             -backend-config="bucket=pricing-agent-tf-state-tsynode" \
             -backend-config="key=staging/terraform.tfstate" \
