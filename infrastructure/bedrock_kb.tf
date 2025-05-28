@@ -49,17 +49,17 @@ resource "aws_opensearchserverless_security_policy" "encryption_policy" {
   name = "${local.name_prefix}-enc-pol"
   type = "encryption"
   description = "Encryption policy for OpenSearch Serverless collection"
-  policy = jsonencode([{
-    Rules = [
-      {
-        ResourceType = "collection"
-        Resource = [
-          "collection/${local.name_prefix}-kb-coll"
-        ]
-      }
-    ]
-    AWSOwnedKey = true
-  }])
+  policy = <<POLICY
+{
+  "Rules": [
+    {
+      "ResourceType": "collection",
+      "Resource": ["collection/${local.name_prefix}-kb-coll"]
+    }
+  ],
+  "AWSOwnedKey": true
+}
+POLICY
 }
 
 # Create network policy for OpenSearch Serverless
@@ -67,7 +67,7 @@ resource "aws_opensearchserverless_security_policy" "network_policy" {
   name = "${local.name_prefix}-net-pol"
   type = "network"
   description = "Network policy for OpenSearch Serverless collection"
-  policy = jsonencode([{
+  policy = jsonencode({
     Rules = [
       {
         ResourceType = "collection"
@@ -77,7 +77,7 @@ resource "aws_opensearchserverless_security_policy" "network_policy" {
       }
     ]
     AllowFromPublic = true
-  }])
+  })
 }
 
 # Create OpenSearch Serverless Collection for the knowledge base

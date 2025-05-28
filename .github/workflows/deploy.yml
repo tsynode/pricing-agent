@@ -242,7 +242,7 @@ jobs:
           if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
             terraform import aws_lb.main $ALB_ARN || echo "Failed to import ALB or already imported."
           else
-            echo "ALB ${ENVIRONMENT_NAME}-alb not found, skipping import."
+            echo "Describing ALB: pricing-agent-${ENVIRONMENT_NAME}-alb not found, skipping import."
           fi
 
           # Target Group
@@ -251,7 +251,7 @@ jobs:
           if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
             terraform import aws_lb_target_group.main $TG_ARN || echo "Failed to import Target Group or already imported."
           else
-            echo "Target Group ${ENVIRONMENT_NAME}-tg not found, skipping import."
+            echo "Target Group pricing-agent-${ENVIRONMENT_NAME}-tg not found, skipping import."
           fi
 
           # IAM Role: bedrock_management
