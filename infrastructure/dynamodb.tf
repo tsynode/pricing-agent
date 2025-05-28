@@ -8,8 +8,7 @@ resource "aws_dynamodb_table" "pricing" {
     type = "S"
   }
   
-  # This prevents Terraform from trying to modify certain attributes
-  # that might cause conflicts with existing resources
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
@@ -37,8 +36,7 @@ resource "aws_dynamodb_table" "inventory" {
     type = "S"
   }
   
-  # This prevents Terraform from trying to modify certain attributes
-  # that might cause conflicts with existing resources
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
@@ -73,8 +71,7 @@ resource "aws_dynamodb_table" "sessions" {
     enabled        = true
   }
   
-  # This prevents Terraform from trying to modify certain attributes
-  # that might cause conflicts with existing resources
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     ignore_changes = [

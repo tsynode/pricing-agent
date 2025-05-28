@@ -9,7 +9,7 @@ resource "aws_lb" "main" {
   
   enable_deletion_protection = false
   
-  # Allow proper management of resources with workspaces
+  # Lifecycle configuration for load balancer
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
@@ -54,7 +54,7 @@ resource "aws_lb_target_group" "main" {
     matcher             = "200,302"  # Streamlit may return redirects
   }
   
-  # Allow proper management of resources with workspaces
+  # Lifecycle configuration for load balancer
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
@@ -104,10 +104,8 @@ resource "aws_lb_listener" "http" {
     }
   }
   
-  # Create a dummy listener rule to ensure the target group is associated with the ALB
-  # This ensures the target group is properly registered with the load balancer
+  # Ensure the target group is properly registered with the load balancer
   # even when the default action is a redirect
-  # Also allows proper management of resources with workspaces
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
@@ -138,7 +136,7 @@ resource "aws_lb_listener" "https" {
     target_group_arn = aws_lb_target_group.main.arn
   }
   
-  # Allow proper management of resources with workspaces
+  # Lifecycle configuration for load balancer
   lifecycle {
     prevent_destroy = false
     ignore_changes = [

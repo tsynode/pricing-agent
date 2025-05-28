@@ -6,7 +6,7 @@ resource "aws_ecs_cluster" "main" {
     value = "enabled"
   }
   
-  # Prevent conflicts with existing clusters
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     create_before_destroy = true
@@ -24,7 +24,7 @@ resource "aws_ecs_task_definition" "main" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
   
-  # Task definitions are immutable, so create_before_destroy ensures the new one is created first
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     create_before_destroy = true
@@ -102,8 +102,7 @@ resource "aws_ecs_service" "main" {
   launch_type     = "FARGATE"
   
   # ECS services should be managed carefully to prevent disruption
-  # We allow external updates to task definitions and scaling
-  # But we don't set prevent_destroy as services may need recreation during development
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     create_before_destroy = true
@@ -153,8 +152,7 @@ resource "aws_cloudwatch_log_group" "main" {
   name              = "/ecs/${local.name_prefix}"
   retention_in_days = 30
   
-  # Allow CloudWatch log groups to be recreated during development
-  # Only enable prevent_destroy in production
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
@@ -174,8 +172,6 @@ resource "aws_ecr_repository" "main" {
     scan_on_push = true
   }
   
-  # Temporarily allowing destroy for clean slate deployment
-  # Will be re-enabled after deployment is successful
   lifecycle {
     prevent_destroy = false
     ignore_changes = [

@@ -8,7 +8,7 @@ resource "aws_vpc" "main" {
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
-      # Only ignore these specific attributes, not the entire resource
+      # Core VPC attributes that shouldn't change
       cidr_block,
       enable_dns_support,
       enable_dns_hostnames
@@ -207,7 +207,6 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   
-  # Allow recreation of security groups for simplified deployment
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
@@ -225,35 +224,28 @@ resource "aws_security_group" "alb" {
 }
 
 # Security group for ECS tasks
-# Allows inbound traffic only from the ALB and outbound traffic to anywhere
 resource "aws_security_group" "ecs" {
   name        = "${local.name_prefix}-ecs-sg"
   description = "Security group for ECS tasks"
   vpc_id      = aws_vpc.main.id
   
-  # Only allow inbound traffic from the ALB security group
   ingress {
     from_port       = var.container_port
     to_port         = var.container_port
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
-    description     = "Allow inbound traffic from ALB on container port"
   }
   
-  # Allow all outbound traffic (needed for pulling container images, etc.)
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound traffic"
   }
   
-  # Allow recreation of security groups for simplified deployment
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
-      # Only ignore these specific attributes, not the entire resource
       name,
       description
     ]

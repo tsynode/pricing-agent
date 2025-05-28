@@ -1,10 +1,5 @@
 # Bedrock Knowledge Base Configuration
-# NOTE: Using two-stage approach for Bedrock resources
-# Stage 1: Deploy core infrastructure with placeholder in SSM Parameter Store
-# Stage 2: Create and configure Bedrock knowledge base separately
-
-# The following resources are commented out for initial deployment
-# They will be created manually or in the second stage
+# Resources below are commented out for initial deployment and will be created separately
 
 # resource "aws_bedrock_knowledge_base" "pricing_kb" {
 #   name        = "${local.name_prefix}-kb"
@@ -33,7 +28,7 @@
 #   # Create IAM role for the knowledge base
 #   role_arn = aws_iam_role.kb_role.arn
 #
-#   # Prevent conflicts with existing knowledge base
+#   # Lifecycle configuration
 #   lifecycle {
     prevent_destroy = false
 #     ignore_changes = [
@@ -94,7 +89,7 @@ resource "aws_opensearchserverless_collection" "kb_collection" {
     aws_opensearchserverless_security_policy.network_policy
   ]
 
-  # Prevent conflicts with existing collection
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
@@ -131,7 +126,7 @@ resource "aws_iam_role" "kb_role" {
     ]
   })
   
-  # Prevent conflicts with existing role
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
@@ -293,7 +288,7 @@ resource "aws_iam_role_policy_attachment" "kb_foundation_model" {
 #     }
 #   }
 #   
-#   # Prevent conflicts with existing data source
+#   # Lifecycle configuration
 #   lifecycle {
     prevent_destroy = false
 #     ignore_changes = [
@@ -309,7 +304,7 @@ resource "aws_ssm_parameter" "kb_id" {
   type  = "String"
   value = "placeholder-to-be-updated-manually"
   
-  # Prevent conflicts with existing parameter
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     ignore_changes = [

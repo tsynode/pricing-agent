@@ -3,15 +3,14 @@
 resource "aws_s3_bucket" "policy" {
   bucket = "${local.name_prefix}-policies"
   
-  # This prevents Terraform from recreating the bucket if it already exists
-  # with a slightly different name or configuration
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
       bucket,
       server_side_encryption_configuration,
       versioning
-      # Removed deprecated 'acl' attribute
+
     ]
   }
   
@@ -45,7 +44,7 @@ resource "aws_s3_object" "initial_policies" {
   source = "${path.module}/../policies/${each.value}"
   etag   = filemd5("${path.module}/../policies/${each.value}")
   
-  # Prevent conflicts with existing objects
+  # Lifecycle configuration
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
