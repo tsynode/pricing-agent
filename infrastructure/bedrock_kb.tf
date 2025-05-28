@@ -177,10 +177,4 @@ resource "aws_ssm_parameter" "kb_id" {
   }
   
   tags = local.common_tags
-    ignore_changes = [
-      value
-    ]
-  }
-  
-  tags = local.common_tags
 }
