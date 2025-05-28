@@ -2,7 +2,7 @@ name: Deploy Pricing Agent
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths-ignore:
       - 'policies/**'
   workflow_dispatch:
