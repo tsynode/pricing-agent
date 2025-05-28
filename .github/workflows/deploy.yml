@@ -247,7 +247,7 @@ jobs:
 
           # Target Group
           echo "Importing Target Group: main"
-          TG_ARN=$(aws elbv2 describe-target-groups --names "${ENVIRONMENT_NAME}-tg" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
+          TG_ARN=$(aws elbv2 describe-target-groups --names "pricing-agent-${ENVIRONMENT_NAME}-tg" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
           if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
             terraform import aws_lb_target_group.main $TG_ARN || echo "Failed to import Target Group or already imported."
           else
