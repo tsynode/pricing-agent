@@ -74,17 +74,14 @@ resource "aws_lb_target_group" "main" {
 }
 
 # HTTP listener for the ALB
-# Either forwards traffic directly or redirects to HTTPS based on configuration
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
   
   default_action {
-    type = "forward"
-    target_group {
-      arn = aws_lb_target_group.main.arn
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
   }
   
   # Ensure the target group is properly registered with the load balancer
@@ -102,5 +99,3 @@ resource "aws_lb_listener" "http" {
   
   tags = local.common_tags
 }
-
-# Removed HTTPS listener for simplicity
