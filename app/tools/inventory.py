@@ -8,7 +8,9 @@ from .pricing import check_price_compliance
 
 # Initialize clients
 dynamodb = boto3.resource('dynamodb')
-inventory_table = dynamodb.Table(os.environ.get('INVENTORY_TABLE_NAME', 'inventory'))
+inventory_table_name = os.environ.get('INVENTORY_TABLE_NAME', 'inventory')
+inventory_table = dynamodb.Table(inventory_table_name)
+print(f"Initialized inventory table: {inventory_table_name}")
 
 @tool
 def scan_inventory(category: str = None, compliance_only: bool = False) -> dict:

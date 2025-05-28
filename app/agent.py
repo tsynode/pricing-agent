@@ -19,16 +19,22 @@ def get_knowledge_base_id():
     
     # Get knowledge base parameter path from environment or use default
     knowledge_base_param_path = os.environ.get('KB_PARAM_NAME', '/pricing-agent-dev/knowledge-base-id')
+    print(f"Looking for knowledge base ID at SSM parameter: {knowledge_base_param_path}")
     
     try:
         response = ssm.get_parameter(
             Name=knowledge_base_param_path,
             WithDecryption=False
         )
-        return response['Parameter']['Value']
+        kb_id = response['Parameter']['Value']
+        print(f"Retrieved knowledge base ID: {kb_id}")
+        return kb_id
     except Exception as e:
         print(f"Error retrieving knowledge base ID: {str(e)}")
-        return None
+        # For testing, return a hardcoded knowledge base ID
+        hardcoded_id = os.environ.get('HARDCODED_KB_ID', '')
+        print(f"Using hardcoded knowledge base ID for testing: {hardcoded_id if hardcoded_id else 'None provided'}")
+        return hardcoded_id
 
 def create_agent(session_id=None):
     """Create the pricing agent with optional session restoration"""
@@ -52,9 +58,10 @@ def create_agent(session_id=None):
     # Configure the retrieve tool with the knowledge base
     retrieve_config = {
         "knowledge_base_id": kb_id,
-        "model_id": os.environ.get('MODEL_ID', 'anthropic.claude-opus-4-20250514-v1:0'),
+        "model_id": 'anthropic.claude-3-haiku-20240307-v1:0',  # Use Claude 3 Haiku for knowledge base retrieval
         "region_name": os.environ.get('AWS_REGION', 'us-east-1')
     }
+    print(f"Retrieve tool config: {retrieve_config}")
     
     # Use Claude 3 Haiku which supports on-demand throughput
     # This model doesn't require provisioned throughput

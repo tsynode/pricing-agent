@@ -10,7 +10,9 @@ from datetime import datetime
 
 # Initialize clients
 dynamodb = boto3.resource('dynamodb')
-pricing_table = dynamodb.Table(os.environ.get('PRICING_TABLE_NAME', 'pricing-rules'))
+pricing_table_name = os.environ.get('PRICING_TABLE_NAME', 'pricing-rules')
+pricing_table = dynamodb.Table(pricing_table_name)
+print(f"Initialized pricing table: {pricing_table_name}")
 
 @tool
 def get_pricing_policy(product_category: str = None) -> str:
