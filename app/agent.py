@@ -74,23 +74,45 @@ def create_agent(session_id=None):
     print(f"Using model: {model_identifier}")
     
     # Create the agent with the configured model
+    try:
+        # Import tools directly from the app.tools package
+        from app.tools import get_pricing_policy, check_price_compliance, update_price, scan_inventory
+    except ImportError:
+        # Fallback for when running from within the app directory
+        try:
+            from tools import get_pricing_policy, check_price_compliance, update_price, scan_inventory
+        except ImportError:
+            print("Warning: Could not import custom tools. Using default tools only.")
+            get_pricing_policy = None
+            check_price_compliance = None
+            update_price = None
+            scan_inventory = None
+    
+    # Prepare the tools list
+    tools_list = [
+        # Built-in tools with configuration
+        retrieve.with_config(**retrieve_config),
+        current_time,
+    ]
+    
+    # Add custom tools if available
+    if get_pricing_policy:
+        tools_list.append(get_pricing_policy)
+    if check_price_compliance:
+        tools_list.append(check_price_compliance)
+    if scan_inventory:
+        tools_list.append(scan_inventory)
+    if update_price:
+        tools_list.append(update_price)
+    
+    # Create the agent
     agent = Agent(
         model=BedrockModel(
             model_id=model_identifier,
             max_tokens=4096
         ),
         system_prompt=system_prompt,
-        tools=[
-            # Built-in tools with configuration
-            {"tool": retrieve, "config": retrieve_config},
-            current_time,
-            
-            # Custom pricing tools
-            check_price_compliance,
-            scan_inventory,
-            update_price,
-            get_pricing_policy
-        ]
+        tools=tools_list
     )
     
     # Try to restore session from DynamoDB if session_id is provided
