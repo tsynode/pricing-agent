@@ -14,12 +14,8 @@ resource "aws_dynamodb_table" "pricing" {
     ignore_changes = [
       read_capacity,
       write_capacity,
-      replica,
-      point_in_time_recovery,
-      stream_enabled,
-      stream_view_type,
-      hash_key,
-      attribute
+      billing_mode,
+      ttl
     ]
   }
   
@@ -42,12 +38,8 @@ resource "aws_dynamodb_table" "inventory" {
     ignore_changes = [
       read_capacity,
       write_capacity,
-      replica,
-      point_in_time_recovery,
-      stream_enabled,
-      stream_view_type,
-      hash_key,
-      attribute
+      billing_mode,
+      ttl
     ]
   }
   
@@ -77,14 +69,8 @@ resource "aws_dynamodb_table" "sessions" {
     ignore_changes = [
       read_capacity,
       write_capacity,
-      replica,
-      point_in_time_recovery,
-      stream_enabled,
-      stream_view_type,
-      hash_key,
-      attribute,
-      billing_mode,  # Added to prevent conflicts with existing tables
-      ttl            # Added to prevent conflicts with existing tables
+      billing_mode,
+      ttl
     ]
   }
   
