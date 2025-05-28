@@ -142,9 +142,9 @@ jobs:
           echo "\n DEBUG: All environment variables:\n"
           env | grep -E 'ENVIRONMENT|TF_VAR|MODEL'
           
-          # Initialize Terraform with S3 backend using workspace approach
+          # Initialize Terraform with S3 backend using backend.hcl
           echo "\n STEP 1: Initializing Terraform with S3 backend...\n"
-          terraform init
+          terraform init -backend-config=backend.hcl
           
           echo "\n STEP 2: Listing available workspaces before selection...\n"
           terraform workspace list
