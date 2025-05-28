@@ -239,8 +239,6 @@ jobs:
             # Construct the item attributes JSON for the hash key. Note the careful quoting and escaping.
             ITEM_KEY_JSON=$(printf '{"product_id":{"S":"%s"}}' "$product_id")
             terraform import "aws_dynamodb_table_item.sample_pricing_rules[${#pricing_product_ids[@]}-1]" "${PRICING_TABLE_NAME}/${ITEM_KEY_JSON}" || echo "Failed to import pricing rule ${product_id} or already imported."
-            # Decrement count for correct indexing in Terraform resource (which is count based)
-            unset 'pricing_product_ids[${#pricing_product_ids[@]}-1]'
           done
 
           # Sample Inventory Items
@@ -249,7 +247,6 @@ jobs:
             echo "Importing sample_inventory for product_id: ${product_id}"
             ITEM_KEY_JSON=$(printf '{"product_id":{"S":"%s"}}' "$product_id")
             terraform import "aws_dynamodb_table_item.sample_inventory[${#inventory_product_ids[@]}-1]" "${INVENTORY_TABLE_NAME}/${ITEM_KEY_JSON}" || echo "Failed to import inventory item ${product_id} or already imported."
-            unset 'inventory_product_ids[${#inventory_product_ids[@]}-1]'
           done
 
           echo "Importing IAM Policy: ecs_task_policy"
@@ -257,6 +254,29 @@ jobs:
           (terraform import aws_iam_policy.ecs_task_policy $POLICY_ARN_ECS_TASK && echo "IAM Policy ecs_task_policy imported successfully.") || echo "Failed to import IAM Policy ecs_task_policy or it does not exist / already in state. Continuing..."
 
           # Import sample inventory items
+
+          # Import ALB Security Group if it exists
+          echo "Importing Security Group: alb"
+          # Ensure VPC_ID_QUERY is set from the VPC import step (line 188 approx)
+          if [ -n "$VPC_ID_QUERY" ] && [ "$VPC_ID_QUERY" != "None" ]; then
+            ALB_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=pricing-agent-${ENVIRONMENT_NAME}-alb-sg" "Name=vpc-id,Values=${VPC_ID_QUERY}" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "None")
+            if [ -n "$ALB_SG_ID" ] && [ "$ALB_SG_ID" != "None" ]; then
+              terraform import aws_security_group.alb $ALB_SG_ID || echo "Failed to import ALB Security Group (pricing-agent-${ENVIRONMENT_NAME}-alb-sg) or already imported."
+            else
+              echo "ALB Security Group not found by name pricing-agent-${ENVIRONMENT_NAME}-alb-sg in VPC ${VPC_ID_QUERY}, skipping import."
+            fi
+          else
+            echo "VPC ID not found (VPC_ID_QUERY was '$VPC_ID_QUERY'), skipping ALB Security Group import."
+          fi
+
+          # Import ALB Target Group if it exists
+          echo "Importing Target Group: main"
+          TG_ARN=$(aws elbv2 describe-target-groups --names "pricing-agent-${ENVIRONMENT_NAME}-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
+          if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
+            terraform import aws_lb_target_group.main $TG_ARN || echo "Failed to import Target Group (pricing-agent-${ENVIRONMENT_NAME}-tg) or already imported."
+          else
+            echo "Target Group pricing-agent-${ENVIRONMENT_NAME}-tg not found, skipping import."
+          fi
 
           # ALB
           echo "Importing Application Load Balancer: main"
@@ -392,22 +412,23 @@ jobs:
           TF_VAR_enable_https: ${{ env.ENABLE_HTTPS }}
           TF_VAR_inference_profile_arn: ${{ env.INFERENCE_PROFILE_ARN }}
         run: |
-          echo "\n📝️ Deploying infrastructure...\n"
+          echo "\n Deploying infrastructure...\n"
           
           # Note: Terraform has already been initialized and workspace selected in the previous step
           terraform plan -out=tfplan
 
-          echo "\n🚀 Applying Terraform configuration...\n"
+          echo "\n Applying Terraform configuration...\n"
           
-          echo "\n🔍 Checking S3 bucket contents...\n"
+          echo "\n Checking S3 bucket contents...\n"
           aws s3 ls s3://$TF_BUCKET_NAME/ --recursive
           
           # Check current state
-          echo "\n🔍 Checking current Terraform state...\n"
+          echo "\n Checking current Terraform state...\n"
           terraform state list || echo "No resources in state yet"
           
+
           # Import existing resources if they exist
-          echo "\n🔍 Importing existing resources if they exist...\n"
+          echo "\n Importing existing resources if they exist...\n"
           aws s3 ls s3://$TF_BUCKET_NAME 2>/dev/null && \
             terraform import -allow-missing-config aws_s3_bucket.tf_state $TF_BUCKET_NAME || \
             echo "S3 bucket does not exist yet, will be created"
