@@ -1,49 +1,34 @@
 # Pricing Agent
 
-A pricing compliance agent built with Strands Agents SDK and Streamlit.
+A pricing compliance agent built with Strands Agents SDK and Streamlit, powered by Claude 3.7 Sonnet.
 
 ## Overview
 
-This application helps ensure products are priced correctly according to company policies and regulations. It uses the Strands Agents SDK to create an AI agent powered by Claude that can:
+This application helps ensure products are priced correctly according to company policies and regulations. It uses the Strands Agents SDK to create an AI agent that can:
 
 - Check if product prices comply with pricing policies
 - Scan inventory for pricing issues
 - Update product prices
-- Explain pricing policies to users using the knowledge base
+- Explain pricing policies to users using the Bedrock Knowledge Base
 
 ## Architecture
 
-### Current Implementation (Stage 1)
+## Architecture
 
 ![Current Architecture](docs/images/minimal_architecture.png)
 
-Our current implementation focuses on simplicity and core functionality:
+The architecture follows a "stupid simple" approach that prioritizes simplicity and maintainability:
 
 - **Streamlit UI with Strands Agent**: A single container running both the UI and agent
 - **Direct Tool Integration**: Tools are implemented as Python functions with the `@tool` decorator
 - **Knowledge Base**: Bedrock Knowledge Base with OpenSearch for policy retrieval
 - **Data Storage**: DynamoDB tables for pricing rules and inventory data
 
-This architecture provides a clean, maintainable implementation that delivers the core functionality while minimizing infrastructure complexity.
+This architecture delivers core functionality while minimizing infrastructure complexity for easier troubleshooting.
 
-### Target Architecture (Future)
+## Deployment
 
-![Target Architecture](docs/images/scalable_architecture.png)
-
-The target architecture adds scalability for handling large inventories:
-
-- **Batch Processing**: EventBridge for scheduled runs, SQS for batch queues
-- **Separate Lambda Functions**: Dedicated functions for inventory scanning and pricing tools
-- **Same Knowledge Base**: Maintains the same knowledge base architecture
-- **Same Data Storage**: Continues using DynamoDB for data persistence
-
-This architecture will be implemented incrementally as inventory size grows and requires more scalable processing.
-
-### CI/CD Pipeline
-
-<!-- CI/CD Pipeline diagram will be added soon -->
-
-Our deployment process is fully automated:
+The deployment process is fully automated using GitHub Actions and Terraform:
 
 - **GitHub Repository**: Source code and policy documents
 - **GitHub Actions**: Automated workflows for deployment, destruction, and KB syncing
@@ -68,17 +53,16 @@ pricing-agent/
 │   └── images/                 # Architecture diagrams
 │
 ├── infrastructure/             # Terraform infrastructure
-│   ├── main.tf
 │   ├── variables.tf
 │   ├── outputs.tf
+│   ├── providers.tf
 │   ├── vpc.tf
 │   ├── ecs.tf
 │   ├── alb.tf
 │   ├── s3.tf
 │   ├── dynamodb.tf
 │   ├── iam.tf
-│   ├── bedrock.tf
-│   └── backend.tf
+│   └── bedrock_kb.tf
 │
 ├── policies/                   # Policy documents (KB source)
 │   ├── general/
@@ -98,15 +82,18 @@ pricing-agent/
         └── sync_kb.yml         # KB sync workflow
 ```
 
-## Deployment
+## Getting Started
 
-The application is deployed using GitHub Actions CI/CD pipeline:
+### Prerequisites
+
+- AWS Account with appropriate permissions
+- GitHub account to fork/clone this repository
+
+### Deployment Steps
 
 1. **Set up GitHub Secrets**:
    - `AWS_ACCESS_KEY_ID`: AWS access key with appropriate permissions
    - `AWS_SECRET_ACCESS_KEY`: Corresponding AWS secret key
-   - `AWS_REGION`: AWS region for deployment (e.g., `us-east-1`)
-   - `ENVIRONMENT`: Deployment environment (e.g., `dev`, `staging`, `prod`)
 
 2. **Trigger Deployment**:
    - Push to the main branch, or
@@ -122,11 +109,17 @@ Pricing policies are stored in the `policies/` directory. To update policies:
 
 1. Edit the policy files in the appropriate subdirectory
 2. Commit and push changes to the repository
-3. The GitHub Actions workflow will automatically sync the changes to the knowledge base
+3. Run the Knowledge Base sync workflow from the GitHub Actions tab
 
-## Interactive Diagrams
+## Technology Stack
 
-For interactive diagrams, you can open the original .drawio files in the docs directory using [draw.io](https://app.diagrams.net/).
+- **Frontend**: Streamlit
+- **Agent Framework**: Strands Agents SDK
+- **LLM**: Claude 3.7 Sonnet via Amazon Bedrock
+- **Vector Database**: Amazon OpenSearch Serverless
+- **Data Storage**: Amazon DynamoDB
+- **Infrastructure**: AWS (ECS, ALB, S3) managed by Terraform
+- **CI/CD**: GitHub Actions
 
 ## License
 
