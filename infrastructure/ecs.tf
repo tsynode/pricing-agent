@@ -128,7 +128,6 @@ resource "aws_ecs_service" "main" {
   
   depends_on = [
     aws_lb_listener.http,
-    aws_lb_listener.https,  # Include HTTPS listener as a dependency
     aws_lb_target_group.main,  # Explicit dependency on target group
     aws_lb.main,  # Explicit dependency on the load balancer
     aws_iam_role_policy_attachment.ecs_execution,
