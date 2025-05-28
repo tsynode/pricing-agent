@@ -1,5 +1,4 @@
-# Get the current AWS account ID
-data "aws_caller_identity" "current" {}
+# Note: aws_caller_identity data source is defined in bedrock_kb.tf
 
 resource "aws_iam_role" "ecs_execution" {
   name = "${local.name_prefix}-ecs-execution-role"

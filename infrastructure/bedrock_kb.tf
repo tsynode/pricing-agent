@@ -177,18 +177,6 @@ resource "aws_ssm_parameter" "kb_id" {
   }
   
   tags = local.common_tags
-}
-
-# Create a placeholder SSM parameter for the knowledge base ID
-# This will be updated manually or in the second stage
-resource "aws_ssm_parameter" "kb_id" {
-  name  = "/${local.name_prefix}/knowledge-base-id"
-  type  = "String"
-  value = "placeholder-to-be-updated-manually"
-  
-  # Lifecycle configuration
-  lifecycle {
-    prevent_destroy = false
     ignore_changes = [
       value
     ]

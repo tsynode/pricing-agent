@@ -6,9 +6,11 @@ terraform {
     }
   }
   
-  # Hardcoded S3 backend configuration for simplicity
+  # S3 backend configuration
+  # Note: The bucket name is dynamically created in the GitHub Actions workflow
+  # as pricing-agent-tf-state-{github-owner}
   backend "s3" {
-    bucket = "pricing-agent-tf-state"
+    bucket = "pricing-agent-tf-state-tsynode"
     key    = "terraform.tfstate"
     region = "us-east-1"
     encrypt = true
