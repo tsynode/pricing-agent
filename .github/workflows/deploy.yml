@@ -238,7 +238,7 @@ jobs:
 
           # ALB
           echo "Importing Application Load Balancer: main"
-          ALB_ARN=$(aws elbv2 describe-load-balancers --names "${ENVIRONMENT_NAME}-alb" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null)
+          ALB_ARN=$(aws elbv2 describe-load-balancers --names "pricing-agent-${ENVIRONMENT_NAME}-alb" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null)
           if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
             terraform import aws_lb.main $ALB_ARN || echo "Failed to import ALB or already imported."
           else
