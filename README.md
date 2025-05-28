@@ -8,7 +8,8 @@ This application helps ensure products are priced correctly according to company
 
 - Check if product prices comply with pricing policies
 - Scan inventory for pricing issues
-- Update product prices
+- Update product prices based on category-specific rules
+- Apply time-based pricing for fresh produce items (morning and afternoon discounts)
 - Explain pricing policies to users using the Bedrock Knowledge Base
 
 ## Architecture
@@ -120,6 +121,45 @@ Pricing policies are stored in the `policies/` directory. To update policies:
 - **Data Storage**: Amazon DynamoDB
 - **Infrastructure**: AWS (ECS, ALB, S3) managed by Terraform
 - **CI/CD**: GitHub Actions
+
+## Demo Guide
+
+Use the following sample questions and requests to demonstrate the pricing agent's capabilities:
+
+### Pricing Policy Questions
+
+1. "What are our pricing policies for electronics?"
+2. "Explain the pricing rules for fresh produce."
+3. "What time-based discounts do we apply to perishable items?"
+4. "What are the margin requirements for premium electronics?"
+5. "How do we handle pricing for items nearing expiration?"
+
+### Price Compliance Checks
+
+6. "Check if $4.50 is a compliant price for fresh bread (PROD017)."
+7. "Is $899.99 a valid price for the 4K Smart TV (PROD005)?"
+8. "Verify if $2.49 is within the allowed range for bananas (PROD020)."
+
+### Inventory and Price Updates
+
+9. "Scan inventory for pricing issues in the fresh produce category."
+10. "Update the price of milk (PROD018) to $3.99."
+11. "Find all products with prices below their minimum threshold."
+12. "Update the price of the wireless earbuds (PROD008) to $89.99 and check compliance."
+
+### Time-Based Pricing Scenarios
+
+13. "How would the price of fresh strawberries change if it's currently 11:30 AM?"
+14. "What would be the discounted price for fresh fish at 2:00 PM?"
+15. "Explain how our time-based pricing strategy helps reduce waste for perishable items."
+
+### Advanced Queries
+
+16. "Compare pricing policies between electronics and fresh produce categories."
+17. "What's our strategy for maintaining margins while implementing time-based discounts?"
+18. "How do we ensure prices don't fall below wholesale costs when applying discounts?"
+19. "What pricing adjustments should we make for the upcoming holiday season?"
+20. "Analyze the effectiveness of our current fresh produce pricing strategy."
 
 ## License
 
