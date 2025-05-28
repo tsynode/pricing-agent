@@ -59,5 +59,29 @@ resource "aws_ssm_parameter" "policy_bucket_name" {
   type  = "String"
   value = aws_s3_bucket.policy.id
   
+  # Lifecycle configuration
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes = []
+  }
+  
+  tags = local.common_tags
+}
+
+# SSM Parameter to store the Knowledge Base ID
+# This is managed outside of Terraform but referenced by the sync script
+resource "aws_ssm_parameter" "kb_id" {
+  name  = "/${local.name_prefix}/knowledge-base-id"
+  type  = "String"
+  value = "placeholder-to-be-updated-manually"
+  
+  # Lifecycle configuration
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes = [
+      value
+    ]
+  }
+  
   tags = local.common_tags
 }
