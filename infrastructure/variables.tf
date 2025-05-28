@@ -61,7 +61,7 @@ variable "health_check_path" {
 variable "model_id" {
   description = "Bedrock model ID for AI models. Available options: anthropic.claude-opus-4-20250514-v1:0 (Claude Opus 4), anthropic.claude-sonnet-4-20250514-v1:0 (Claude Sonnet 4), anthropic.claude-3-7-sonnet-20250219-v1:0 (Claude 3.7 Sonnet)"
   type        = string
-  default     = "anthropic.claude-opus-4-20250514-v1:0"
+  default     = "anthropic.claude-3-7-sonnet-20250219-v1:0"
 }
 
 variable "certificate_arn" {
@@ -70,8 +70,4 @@ variable "certificate_arn" {
   default     = null
 }
 
-variable "inference_profile_arn" {
-  description = "ARN of the Bedrock inference profile for Claude 4 Opus models"
-  type        = string
-  default     = null
-}
+# Inference profile is not needed for Claude 3.7 Sonnet

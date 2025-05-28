@@ -1,7 +1,4 @@
-# AWS Provider configuration
-provider "aws" {
-  region = var.aws_region
-}
+# AWS Provider configuration is in providers.tf
 
 # Define local variables for consistent naming and tagging across resources
 locals {

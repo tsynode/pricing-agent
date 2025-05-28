@@ -73,12 +73,9 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "MODEL_ID"
-          value = "anthropic.claude-3-7-sonnet-20250219-v1:0"
-        },
-        {
-          name  = "INFERENCE_PROFILE_ARN"
-          value = var.inference_profile_arn != "" ? var.inference_profile_arn : "none"
+          value = var.model_id
         }
+        # Inference profile not needed for Claude 3.7 Sonnet
       ]
       
       logConfiguration = {
