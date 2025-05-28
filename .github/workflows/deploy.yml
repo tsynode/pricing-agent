@@ -140,25 +140,17 @@ jobs:
           
           # Debug: Check all environment variables
           echo "\n DEBUG: All environment variables:\n"
-          env | grep -E 'ENVIRONMENT|TF_VAR|MODEL'
-          
-          # Initialize Terraform with S3 backend using backend.hcl
+          # Initialize Terraform with S3 backend
           echo "\n STEP 1: Initializing Terraform with S3 backend...\n"
-          terraform init -backend-config=backend.hcl
-          
-          echo "\n STEP 2: Listing available workspaces before selection...\n"
-          terraform workspace list
-            
-          echo "\n STEP 3: Selecting or creating workspace...\n"
-          # Select or create workspace based on environment
-          terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
-          
-          # Verify the workspace
-          echo "\n🔍 STEP 4: Active Terraform workspace: $(terraform workspace show)\n"
+          terraform init \
+            -backend-config="bucket=pricing-agent-tf-state-tsynode" \
+            -backend-config="key=staging/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="encrypt=true"
           
           # List the S3 bucket contents to verify state files
-          echo "\n🔍 STEP 5: Checking S3 bucket contents...\n"
-          aws s3 ls s3://$TF_BUCKET_NAME/ --recursive
+          echo "\n🔍 STEP 2: Checking S3 bucket contents...\n"
+          aws s3 ls s3://pricing-agent-tf-state-tsynode/ --recursive
       
       - name: Import Existing Resources
         working-directory: ./infrastructure

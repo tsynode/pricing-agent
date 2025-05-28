@@ -1,8 +1,4 @@
 terraform {
-  backend "s3" {
-    # Backend configuration will be provided by backend.hcl
-  }
-  
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -15,4 +11,9 @@ terraform {
   }
   
   required_version = ">= 1.0.0"
+}
+
+# Configure the AWS Provider
+provider "aws" {
+  region = "us-east-1"
 }
