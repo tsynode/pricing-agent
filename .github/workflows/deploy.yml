@@ -116,28 +116,14 @@ jobs:
         working-directory: ./infrastructure
         run: terraform validate
       
-      - name: Import or Create ECR Repository
+      - name: Create ECR Repository
         working-directory: ./infrastructure
         run: |
-          # Check if ECR repository already exists
-          REPO_NAME="pricing-agent-${ENVIRONMENT}"
-          echo "Checking if ECR repository $REPO_NAME already exists..."
-          
-          # Try to describe the repository with better error handling
-          REPO_EXISTS=$(aws ecr describe-repositories --repository-names $REPO_NAME 2>/dev/null || echo "NOT_FOUND")
-          
-          if [[ "$REPO_EXISTS" != "NOT_FOUND" ]]; then
-            echo "ECR repository already exists. Importing it..."
-            # Try to import the repository
-            terraform import aws_ecr_repository.main $REPO_NAME || {
-              echo "Failed to import ECR repository. This is not critical, continuing..."
-            }
-          else
-            echo "ECR repository does not exist. Creating it..."
-            terraform apply -auto-approve -target=aws_ecr_repository.main
-          fi
+          REPO_NAME="pricing-agent-staging"
+          echo "Creating ECR repository $REPO_NAME if it doesn't exist"
+          terraform apply -auto-approve -target=aws_ecr_repository.main
         env:
-          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+          TF_VAR_environment: staging
           TF_VAR_project_name: pricing-agent
           TF_VAR_model_id: ${{ env.MODEL }}
           TF_VAR_domain_name: ${{ env.DOMAIN_NAME }}
@@ -147,18 +133,10 @@ jobs:
       - name: Set ECR Repository URL
         id: set-ecr-repo
         run: |
-          # Get account ID for constructing ECR repository URL
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          REGION=${AWS_REGION}
-          
-          # Construct the ECR URL manually
-          ECR_REPO_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/pricing-agent-${ENVIRONMENT}"
-          
+          ECR_REPO_URI="${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/pricing-agent-staging"
           echo "ecr_repo_uri=$ECR_REPO_URI" >> $GITHUB_OUTPUT
-          echo "Constructed ECR repository URL: $ECR_REPO_URI"
-        env:
-          ENVIRONMENT: ${{ env.ENVIRONMENT }}
-          AWS_REGION: ${{ env.AWS_REGION }}
+          echo "Using ECR repository: $ECR_REPO_URI"
       
 
       
