@@ -15,20 +15,31 @@ from tools.inventory import scan_inventory
 
 def get_knowledge_base_id():
     """Retrieve the knowledge base ID from SSM Parameter Store"""
-    ssm = boto3.client('ssm')
+    # Check for hardcoded knowledge base ID first (for demo purposes)
+    hardcoded_kb_id = os.environ.get('HARDCODED_KB_ID')
+    if hardcoded_kb_id:
+        print(f"Using hardcoded knowledge base ID: {hardcoded_kb_id}")
+        return hardcoded_kb_id
     
     # Get knowledge base parameter path from environment or use default
     knowledge_base_param_path = os.environ.get('KB_PARAM_NAME', '/pricing-agent-dev/knowledge-base-id')
+    print(f"Looking for knowledge base ID in SSM parameter: {knowledge_base_param_path}")
     
     try:
+        ssm = boto3.client('ssm')
         response = ssm.get_parameter(
             Name=knowledge_base_param_path,
             WithDecryption=False
         )
-        return response['Parameter']['Value']
+        kb_id = response['Parameter']['Value']
+        print(f"Successfully retrieved knowledge base ID from SSM: {kb_id}")
+        return kb_id
     except Exception as e:
-        print(f"Error retrieving knowledge base ID: {str(e)}")
-        return None
+        print(f"Error retrieving knowledge base ID from SSM: {str(e)}")
+        # Fallback to a demo knowledge base ID
+        fallback_id = "K7YVXM9QBP"  # This is a placeholder - replace with your actual fallback ID if available
+        print(f"Using fallback knowledge base ID for demo: {fallback_id}")
+        return fallback_id
 
 def create_agent(session_id=None):
     """Create the pricing agent with optional session restoration"""
@@ -50,11 +61,17 @@ def create_agent(session_id=None):
     kb_id = get_knowledge_base_id()
     
     # Configure the retrieve tool with the knowledge base
+    # Always use Claude 3 Haiku for the retrieve tool to ensure compatibility
+    retrieve_model_id = 'anthropic.claude-3-haiku-20240307-v1:0'
+    print(f"Using model {retrieve_model_id} for knowledge base retrieval")
+    
     retrieve_config = {
         "knowledge_base_id": kb_id,
-        "model_id": os.environ.get('MODEL_ID', 'anthropic.claude-opus-4-20250514-v1:0'),
+        "model_id": retrieve_model_id,
         "region_name": os.environ.get('AWS_REGION', 'us-east-1')
     }
+    
+    print(f"Knowledge base configuration: {retrieve_config}")
     
     # Use Claude 3 Haiku which supports on-demand throughput
     # This model doesn't require provisioned throughput
@@ -91,6 +108,7 @@ def create_agent(session_id=None):
         try:
             # Get the DynamoDB table name from environment or use default
             table_name = os.environ.get('SESSION_TABLE_NAME', 'pricing-agent-sessions')
+            print(f"Attempting to restore session {session_id} from table {table_name}")
             
             # Initialize DynamoDB client and table
             dynamodb = boto3.resource('dynamodb')
@@ -115,6 +133,7 @@ def create_agent(session_id=None):
         except Exception as e:
             print(f"Error restoring session from DynamoDB: {str(e)}")
             print(f"Proceeding with new session: {session_id}")
+            # No need to fail if we can't restore - just start a new session
     
     return agent
 
@@ -127,6 +146,7 @@ def get_chat_list():
     try:
         # Get the DynamoDB table name from environment or use default
         table_name = os.environ.get('SESSION_TABLE_NAME', 'pricing-agent-sessions')
+        print(f"Retrieving chat list from table: {table_name}")
         
         # Initialize DynamoDB client and table
         dynamodb = boto3.resource('dynamodb')
@@ -135,6 +155,7 @@ def get_chat_list():
         # Scan for all sessions, sorted by last_updated
         response = session_table.scan()
         sessions = response.get('Items', [])
+        print(f"Found {len(sessions)} chat sessions in DynamoDB")
         
         # Process sessions to extract relevant information
         chat_list = []
@@ -187,6 +208,7 @@ def save_agent_session(agent, session_id):
     try:
         # Get the DynamoDB table name from environment or use default
         table_name = os.environ.get('SESSION_TABLE_NAME', 'pricing-agent-sessions')
+        print(f"Saving session {session_id} to table {table_name}")
         
         # Initialize DynamoDB client and table
         dynamodb = boto3.resource('dynamodb')
@@ -200,11 +222,16 @@ def save_agent_session(agent, session_id):
             'ttl': int((datetime.now().timestamp() + (30 * 24 * 60 * 60)))  # 30 days TTL
         }
         
-        # Save to DynamoDB
-        session_table.put_item(Item=session_data)
-        
-        print(f"Session {session_id} saved to DynamoDB")
-        return True
+        try:
+            # Save to DynamoDB
+            session_table.put_item(Item=session_data)
+            print(f"Session {session_id} saved to DynamoDB successfully")
+            return True
+        except Exception as table_error:
+            print(f"Error saving to DynamoDB table: {str(table_error)}")
+            print("Will continue without saving session state")
+            return False
     except Exception as e:
-        print(f"Error saving session to DynamoDB: {str(e)}")
+        print(f"Error in save_agent_session: {str(e)}")
+        print("Will continue without saving session state")
         return False
