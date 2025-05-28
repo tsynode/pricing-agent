@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     bucket  = "pricing-agent-tf-state-tsynode"
-    key     = "env:/${terraform.workspace}/terraform.tfstate"
+    key     = "${terraform.workspace}/terraform.tfstate"
     region  = "us-east-1"
     encrypt = true
   }
