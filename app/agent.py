@@ -56,9 +56,9 @@ def create_agent(session_id=None):
         "region_name": os.environ.get('AWS_REGION', 'us-east-1')
     }
     
-    # Use Claude 3.7 Sonnet model for simplicity and consistency
-    # Standardized on Claude 3.7 Sonnet for simplicity
-    model_id = os.environ.get('MODEL_ID', 'anthropic.claude-3-7-sonnet-20250219-v1:0')
+    # Use Claude 3 Haiku which supports on-demand throughput
+    # This model doesn't require provisioned throughput
+    model_id = os.environ.get('MODEL_ID', 'anthropic.claude-3-haiku-20240307-v1:0')
     model_identifier = model_id
     print(f"Using model: {model_identifier}")
     

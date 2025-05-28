@@ -87,7 +87,7 @@ jobs:
           terraform apply -auto-approve -target=aws_ecr_repository.main
         env:
           TF_VAR_project_name: pricing-agent
-          TF_VAR_model_id: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
+          TF_VAR_model_id: 'anthropic.claude-3-haiku-20240307-v1:0'
       
       - name: Set ECR Repository URL
         id: set-ecr-repo
@@ -123,7 +123,7 @@ jobs:
         working-directory: ./infrastructure
         env:
           TF_VAR_project_name: 'pricing-agent'
-          TF_VAR_model_id: 'anthropic.claude-3-7-sonnet-20250219-v1:0'
+          TF_VAR_model_id: 'anthropic.claude-3-haiku-20240307-v1:0'
         run: |
           # Generate a plan
           terraform plan -out=tfplan

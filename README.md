@@ -1,6 +1,6 @@
 # Pricing Agent
 
-A pricing compliance agent built with Strands Agents SDK and Streamlit, powered by Claude 3.7 Sonnet.
+A pricing compliance agent built with Strands Agents SDK and Streamlit, powered by Claude 3 Haiku.
 
 ## Overview
 
@@ -115,7 +115,7 @@ Pricing policies are stored in the `policies/` directory. To update policies:
 
 - **Frontend**: Streamlit
 - **Agent Framework**: Strands Agents SDK
-- **LLM**: Claude 3.7 Sonnet via Amazon Bedrock
+- **LLM**: Claude 3 Haiku via Amazon Bedrock
 - **Vector Database**: Amazon OpenSearch Serverless
 - **Data Storage**: Amazon DynamoDB
 - **Infrastructure**: AWS (ECS, ALB, S3) managed by Terraform

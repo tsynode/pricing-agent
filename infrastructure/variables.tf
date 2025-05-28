@@ -53,9 +53,9 @@ variable "health_check_path" {
 }
 
 variable "model_id" {
-  description = "Bedrock model ID for Claude 3.7 Sonnet"
+  description = "Bedrock model ID for Claude 3 Haiku"
   type        = string
-  default     = "anthropic.claude-3-7-sonnet-20250219-v1:0"
+  default     = "anthropic.claude-3-haiku-20240307-v1:0"
 }
 
 # HTTPS support removed for simplicity

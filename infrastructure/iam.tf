@@ -132,7 +132,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
           "arn:aws:bedrock:${var.aws_region}:*:knowledge-base/*",
           "arn:aws:bedrock:us-east-2:*:knowledge-base/*",
           "arn:aws:bedrock:us-west-2:*:knowledge-base/*",
-          # Inference profiles not needed for Claude 3.7 Sonnet
+          # Using Claude 3 Haiku which supports on-demand throughput
         ]
       }
     ]

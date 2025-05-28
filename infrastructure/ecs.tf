@@ -77,7 +77,7 @@ resource "aws_ecs_task_definition" "main" {
           name  = "MODEL_ID"
           value = var.model_id
         }
-        # Inference profile not needed for Claude 3.7 Sonnet
+        # Using Claude 3 Haiku which supports on-demand throughput
       ]
       
       logConfiguration = {
