@@ -94,63 +94,46 @@ jobs:
       
       - name: "Create S3 Bucket for Terraform State"
         run: |
-          # Create a unique bucket name with GitHub repository owner
           BUCKET_NAME="pricing-agent-tf-state-$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
           
-          # Create S3 bucket for Terraform state if it doesn't exist
-          aws s3api head-bucket --bucket $BUCKET_NAME 2>/dev/null || \
-          aws s3api create-bucket \
-            --bucket $BUCKET_NAME \
-            --region ${{ secrets.AWS_REGION }} \
-            $([[ "${{ secrets.AWS_REGION }}" == "us-east-1" ]] || echo "--create-bucket-configuration LocationConstraint=${{ secrets.AWS_REGION }}")
+          # Create bucket if it doesn't exist
+          if ! aws s3api head-bucket --bucket $BUCKET_NAME 2>/dev/null; then
+            aws s3api create-bucket \
+              --bucket $BUCKET_NAME \
+              --region ${{ secrets.AWS_REGION }} \
+              $([[ "${{ secrets.AWS_REGION }}" == "us-east-1" ]] || echo "--create-bucket-configuration LocationConstraint=${{ secrets.AWS_REGION }}")
+            
+            # Configure bucket settings
+            aws s3api put-bucket-versioning \
+              --bucket $BUCKET_NAME \
+              --versioning-configuration Status=Enabled
+            
+            aws s3api put-public-access-block \
+              --bucket $BUCKET_NAME \
+              --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+            
+            aws s3api put-bucket-encryption \
+              --bucket $BUCKET_NAME \
+              --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
+          fi
           
-          # Enable versioning on the bucket
-          aws s3api put-bucket-versioning \
-            --bucket $BUCKET_NAME \
-            --versioning-configuration Status=Enabled
-          
-          # Block public access to the bucket
-          aws s3api put-public-access-block \
-            --bucket $BUCKET_NAME \
-            --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
-          
-          # Enable encryption on the bucket
-          aws s3api put-bucket-encryption \
-            --bucket $BUCKET_NAME \
-            --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
-          
-          # Save the bucket name for Terraform Init step
           echo "TF_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
-          
-          # Print the bucket name for debugging
-          echo "Using S3 bucket: $BUCKET_NAME"
+          echo "✓ Using S3 bucket: $BUCKET_NAME"
       
-      - name: Terraform Init and Workspace Setup
+      - name: Initialize Terraform
         working-directory: ./infrastructure
         run: |
-          echo "Setting up Terraform..."
+          echo "Initializing Terraform for environment: ${{ env.ENVIRONMENT }}"
           
-          # Use the environment variable that was set at the workflow level
-          ENVIRONMENT="${{ env.ENVIRONMENT }}"
-          echo "Using environment: ${ENVIRONMENT}"
-          echo "Environment variable from workflow: ${{ env.ENVIRONMENT }}"
-          
-          # Export the environment variable so it's available to all commands
           export ENVIRONMENT
           
-          # Debug: Check all environment variables
-          echo "\n DEBUG: All environment variables:\n"
           # Initialize Terraform with S3 backend
-          echo "\n STEP 1: Initializing Terraform with S3 backend...\n"
+          echo "Initializing Terraform backend..."
           terraform init \
             -backend-config="bucket=pricing-agent-tf-state-tsynode" \
             -backend-config="key=staging/terraform.tfstate" \
             -backend-config="region=us-east-1" \
             -backend-config="encrypt=true"
-          
-          # List the S3 bucket contents to verify state files
-          echo "\n🔍 STEP 2: Checking S3 bucket contents...\n"
-          aws s3 ls s3://pricing-agent-tf-state-tsynode/ --recursive
       
       - name: Import Existing Resources
         working-directory: ./infrastructure
