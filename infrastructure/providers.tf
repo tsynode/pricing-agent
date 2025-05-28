@@ -1,5 +1,10 @@
 terraform {
-  # S3 backend is configured dynamically in the GitHub Actions workflow
+  backend "s3" {
+    bucket  = "pricing-agent-tf-state-tsynode"
+    key     = "env:/${terraform.workspace}/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
+  }
   
   required_providers {
     aws = {

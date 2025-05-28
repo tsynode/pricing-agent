@@ -272,30 +272,8 @@ jobs:
             echo "VPC ID not found (VPC_ID_QUERY was '$VPC_ID_QUERY'), skipping ALB Security Group import. This is likely an error."
           fi
 
-          # Import ALB Target Group if it exists
-          echo "Importing Target Group: main (pricing-agent-${ENVIRONMENT_NAME}-tg)"
-          TG_ARN=$(aws elbv2 describe-target-groups --names "pricing-agent-${ENVIRONMENT_NAME}-tg" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
-          if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
-            if ! terraform import aws_lb_target_group.main $TG_ARN; then
-              echo "::error::Failed to import Target Group (ARN: $TG_ARN, Name: pricing-agent-${ENVIRONMENT_NAME}-tg). Halting."
-              exit 1
-            fi
-            echo "Target Group pricing-agent-${ENVIRONMENT_NAME}-tg imported successfully."
-          else
-            echo "Target Group pricing-agent-${ENVIRONMENT_NAME}-tg not found, skipping import. This might be an error if it's expected to exist."
-          fi
-
-          # ALB
-          echo "Importing Application Load Balancer: main (pricing-agent-${ENVIRONMENT_NAME}-alb)"
-          ALB_ARN=$(aws elbv2 describe-load-balancers --names "pricing-agent-${ENVIRONMENT_NAME}-alb" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "None")
-          if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
-            if ! terraform import aws_lb.main $ALB_ARN; then
-              echo "::error::Failed to import ALB (ARN: $ALB_ARN, Name: pricing-agent-${ENVIRONMENT_NAME}-alb). Halting."
-              exit 1
-            fi
-            echo "ALB pricing-agent-${ENVIRONMENT_NAME}-alb imported successfully."
-          else
-            echo "ALB pricing-agent-${ENVIRONMENT_NAME}-alb not found, skipping import. This might be an error if it's expected to exist."
+          # ALB Target Group will be created by Terraform if it doesn't exist in the correct VPC.
+          # ALB will be created by Terraform if it doesn't exist in the correct VPC.
           fi
 
           # OpenSearch Serverless Encryption Policy
